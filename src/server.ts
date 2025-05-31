@@ -3,9 +3,9 @@ import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
-import { connectDatabase } from './db/config';
 import { gymRoutes } from './routes/gyms';
 import { trainerRoutes } from './routes/trainers';
+import { checkDatabaseConnection } from './db/config';
 
 // Create Fastify instance
 const fastify = Fastify({
@@ -38,7 +38,7 @@ fastify.register(swagger, {
     },
     servers: [
       {
-        url: 'http://localhost:3000',
+        url: 'http://localhost:4000',
         description: 'Development server'
       }
     ],
@@ -93,7 +93,7 @@ fastify.setNotFoundHandler((request, reply) => {
 const start = async (): Promise<void> => {
   try {
     // Connect to database
-    await connectDatabase();
+    await checkDatabaseConnection();
 
     // Start the server
     const port = parseInt(process.env.PORT || '3000');

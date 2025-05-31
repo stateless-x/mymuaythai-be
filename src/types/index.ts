@@ -1,121 +1,100 @@
+import * as schema from '../db/schema';
+
 // Database entity types based on the ER diagram
 
-export interface User {
-  id: string;
-  role: string;
-  email: string;
-}
+// --- Inferred Types from Drizzle Schema (Strictly based on new ERD-aligned schema) ---
 
-export interface Province {
-  id: number;
-  name_th: string;
-  name_en: string;
-}
+export type User = typeof schema.users.$inferSelect;
+export type NewUser = typeof schema.users.$inferInsert;
 
-export interface Gym {
-  id: string;
-  name_th: string;
-  name_en: string;
-  description_th: string;
-  description_en: string;
-  phone: string;
-  email: string;
-  province_id: number;
-  map_url: string;
-  youtube_url: string;
-  line: string;
-  is_active: boolean;
-  created_at: Date;
-}
+export type Province = typeof schema.provinces.$inferSelect;
+export type NewProvince = typeof schema.provinces.$inferInsert;
 
-export interface GymImage {
-  id: string;
-  gym_id: string;
-  image_url: string;
-}
+export type Gym = typeof schema.gyms.$inferSelect;
+export type NewGym = typeof schema.gyms.$inferInsert;
 
-export interface Trainer {
-  id: string;
-  first_name_th: string;
-  last_name_th: string;
-  first_name_en: string;
-  last_name_en: string;
-  bio_th: string;
-  bio_en: string;
-  phone: string;
-  email: string;
-  line: string;
-  is_freelance: boolean;
-  gym_id: string;
-  province_id: number;
-  is_active: boolean;
-  created_at: Date;
-}
+export type GymImage = typeof schema.gymImages.$inferSelect;
+export type NewGymImage = typeof schema.gymImages.$inferInsert;
 
-export interface Class {
-  id: string;
-  name_th: string;
-  name_en: string;
-  description_th: string;
-  description_en: string;
-}
+export type Trainer = typeof schema.trainers.$inferSelect;
+export type NewTrainer = typeof schema.trainers.$inferInsert;
 
-export interface TrainerClass {
-  id: string;
-  trainer_id: string;
-  class_id: string;
-}
+export type Class = typeof schema.classes.$inferSelect; // Renamed from ClassType
+export type NewClass = typeof schema.classes.$inferInsert; // Renamed from NewClassType
 
-export interface Tag {
-  id: string;
-  name_th: string;
-  name_en: string;
-}
+export type TrainerClass = typeof schema.trainerClasses.$inferSelect;
+export type NewTrainerClass = typeof schema.trainerClasses.$inferInsert;
 
-export interface GymTag {
-  id: string;
-  gym_id: string;
-  tag_id: string;
-}
+export type Tag = typeof schema.tags.$inferSelect;
+export type NewTag = typeof schema.tags.$inferInsert;
 
-export interface TrainerTag {
-  id: string;
-  trainer_id: string;
-  tag_id: string;
-}
+export type GymTag = typeof schema.gymTags.$inferSelect;
+export type NewGymTag = typeof schema.gymTags.$inferInsert;
 
-// Request/Response types for API
-export interface CreateGymRequest {
-  name_th: string;
-  name_en: string;
-  description_th: string;
-  description_en: string;
-  phone: string;
-  email: string;
-  province_id: number;
-  map_url?: string;
-  youtube_url?: string;
-  line?: string;
-}
+export type TrainerTag = typeof schema.trainerTags.$inferSelect;
+export type NewTrainerTag = typeof schema.trainerTags.$inferInsert;
 
-export interface CreateTrainerRequest {
-  first_name_th: string;
-  last_name_th: string;
-  first_name_en: string;
-  last_name_en: string;
-  bio_th: string;
-  bio_en: string;
-  phone: string;
-  email: string;
-  line?: string;
-  is_freelance: boolean;
-  gym_id?: string;
-  province_id: number;
-}
+// --- API Request and Response Types ---
 
+// Generic API Response Structure
 export interface ApiResponse<T> {
   success: boolean;
   data?: T;
-  error?: string;
   message?: string;
+  error?: string;
+  statusCode?: number;
+}
+
+// --- Gym Specific API Types ---
+// CreateGymRequest needs to align with the new gyms schema from ERD
+export interface CreateGymRequest extends Omit<NewGym, 'id' | 'created_at' | 'is_active'> {
+  // province_id is required as per schema (references)
+  // name_th, name_en are required
+  // Other fields like description_th, description_en, phone, email, map_url, youtube_url, line are optional (text or nullable)
+}
+
+export interface UpdateGymRequest extends Partial<Omit<NewGym, 'id' | 'created_at'>> {
+  // is_active can be updated, so not omitting it here explicitly
+  // but typically handled by a dedicated activate/deactivate endpoint.
+}
+
+// For displaying a gym with its related details
+export interface GymWithDetails extends Gym {
+  province?: Province | null;
+  images?: GymImage[];
+  tags?: Tag[]; // via gymTags
+  // Direct classes link for a gym is not in ERD, only via trainers.
+  // If gyms can offer classes directly, a gym_classes table would be needed.
+  associatedTrainers?: Trainer[]; // Trainers primarily associated with this gym
+}
+
+// --- Trainer Specific API Types ---
+export interface CreateTrainerRequest extends Omit<NewTrainer, 'id' | 'created_at' | 'is_active'> {
+  // first_name_th, first_name_en are required.
+  // Other fields are optional based on schema.
+  // gym_id and province_id are optional FKs.
+}
+
+export interface UpdateTrainerRequest extends Partial<Omit<NewTrainer, 'id' | 'created_at'>> {
+}
+
+export interface TrainerWithDetails extends Trainer {
+  province?: Province;
+  primaryGym?: Gym; // The gym listed in trainers.gym_id
+  classes?: Class[]; // via trainerClasses
+  tags?: Tag[]; // via trainerTags
+}
+
+// --- Class Specific API Types (Example) ---
+export interface ClassWithDetails extends Class {
+  trainers?: Trainer[]; // Trainers who teach this class (via trainerClasses)
+}
+
+// --- Paginated Response ---
+export interface PaginatedResponse<T> {
+  items: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
 } 

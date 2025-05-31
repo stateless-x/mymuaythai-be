@@ -1,188 +1,266 @@
 # MyMuayThai Backend - Code Manual
 
-Welcome to the MyMuayThai backend codebase! This document is a guide to help you understand how the backend works, even if you're not a backend developer.
+Welcome to the MyMuayThai backend codebase! This document is a comprehensive guide to help you understand how the backend works, whether you're a developer or just curious about the system architecture.
 
 ## 1. What is this Backend For?
 
-This backend is the engine behind the MyMuayThai application. It's responsible for:
+This backend is the core engine behind the MyMuayThai application, responsible for:
 
-*   **Storing and Managing Data:** Information about Muay Thai gyms, trainers, classes, locations (provinces), and users.
-*   **Providing Data to the App:** When the MyMuayThai app (mobile or web) needs to display a list of gyms, show trainer profiles, or find classes, it asks this backend for that information.
-*   **Handling User Actions:** If a user books a class or a gym owner updates their gym's information, the backend processes these requests.
-*   **Ensuring Security and Consistency:** It makes sure data is handled safely and stays accurate.
+*   **Data Management**: Storing and managing information about Muay Thai gyms, trainers, classes, provinces, and users in a PostgreSQL database
+*   **API Services**: Providing RESTful API endpoints for mobile and web applications to consume data
+*   **Business Logic**: Handling complex operations like search, filtering, relationships between entities
+*   **Data Integrity**: Ensuring consistent and reliable data through proper validation and constraints
+*   **Scalability**: Built with modern tools (Bun, Fastify, Drizzle ORM) for high performance
 
-Think of it like the kitchen in a restaurant. The app is the waiter taking orders and serving food, but the backend is the kitchen preparing the dishes (data) according to the recipes (logic).
+Think of it as the foundation that powers everything - when you search for gyms in Bangkok or view a trainer's profile, this backend processes those requests and delivers the data.
 
-## 2. Project Structure Overview
+## 2. Technology Stack
 
-When you look at the project files, you'll see several main folders:
+*   **Runtime**: Bun (fast JavaScript runtime and package manager)
+*   **Language**: TypeScript (for type safety and better development experience)
+*   **Web Framework**: Fastify (high-performance web framework)
+*   **Database**: PostgreSQL (robust relational database)
+*   **ORM**: Drizzle ORM (modern, type-safe database toolkit)
+*   **Documentation**: Swagger/OpenAPI 3.0 (auto-generated API docs)
+*   **Security**: Helmet, CORS (security middleware)
 
-*   `src/`: This is the heart of the backend code. All the core logic lives here.
-*   `scripts/`: Contains helper programs (scripts) for tasks like setting up the database or managing database changes.
-*   `CODE_MANUAL.md`: (This file!) Your guide to the codebase.
-*   `package.json`: Lists all the tools and libraries the project uses.
-*   `tsconfig.json`: Configuration for TypeScript (the programming language used).
-*   `env.example` & `env.test.example`: Template files for setting up environment-specific configurations (like database passwords). These are usually copied to `.env` which is not committed to git.
+## 3. Project Structure Overview
 
-## 3. Deep Dive into `src/` (The Core Logic)
+```
+mymuaythai-be/
+├── src/                    # Core application code
+│   ├── db/                 # Database configuration and operations
+│   ├── routes/             # API endpoint definitions
+│   ├── services/           # Business logic layer
+│   ├── types/              # TypeScript type definitions
+│   └── server.ts           # Main application entry point
+├── __tests__/              # Test files
+├── drizzle.config.ts       # Drizzle ORM configuration
+├── package.json            # Dependencies and scripts
+├── tsconfig.json           # TypeScript configuration
+├── env.example             # Environment variables template
+└── documents/              # Documentation files
+```
 
-The `src/` directory is where the magic happens. It's further divided:
+## 4. Deep Dive into `src/` (The Core Logic)
 
-### 3.1. `server.ts` - The Main Entrance
+### 4.1. `server.ts` - The Application Entry Point
 
-*   **What it does:** This file is the main starting point for the backend application. When you run the backend, `server.ts` is the first thing that gets executed.
-*   **Key Functions:**
-    *   **Sets up the Server:** It uses a tool called "Fastify" (a fast and efficient web framework) to create the web server that will listen for requests from the app.
-    *   `@fastify/cors`: Allows the app (running on a different web address) to talk to the backend.
-    *   `@fastify/helmet`: Adds basic security protections.
-    *   `@fastify/swagger` & `@fastify/swagger-ui`: Automatically creates API documentation (a live "menu" of what the backend offers) available at the `/docs` web address (e.g., `http://localhost:3000/docs`).
-    *   **Connects to Database:** It makes sure the backend can talk to its database before it starts accepting requests.
-    *   **Defines Basic Routes:** It sets up a `/health` check route (so we can see if the server is running) and registers all the main application routes (see `src/routes/`).
-    *   **Error Handling:** It defines what happens if something goes wrong (e.g., the app asks for something that doesn't exist or an internal error occurs).
-    *   **Starts Listening:** It tells the server to start listening for incoming requests from the app on a specific address (e.g., `http://localhost:3000`).
-    *   **Graceful Shutdown:** Ensures that if the server is stopped, it does so cleanly, closing database connections properly.
+The main server file that bootstraps the entire application:
 
-### 3.2. `src/db/` - Database Central
+**Key Responsibilities:**
+*   **Server Setup**: Creates and configures the Fastify server instance
+*   **Middleware Registration**: 
+    *   `@fastify/helmet`: Security headers and protections
+    *   `@fastify/cors`: Cross-origin resource sharing configuration
+    *   `@fastify/swagger` & `@fastify/swagger-ui`: Auto-generated API documentation
+*   **Route Registration**: Mounts all API routes under `/api` prefix
+*   **Database Connection**: Validates database connectivity on startup
+*   **Error Handling**: Global error handling and 404 responses
+*   **Graceful Shutdown**: Proper cleanup when the server stops
 
-This folder handles everything related to the database (where all the data is stored, likely a PostgreSQL database).
+**Important Features:**
+*   Health check endpoint at `/health`
+*   API documentation available at `/docs`
+*   Structured logging with pino-pretty
+*   Environment-based configuration (PORT, HOST)
 
-*   **`config.ts`:**
-    *   **What it does:** Contains the settings needed to connect to the database, like the address of the database server, username, password, and database name. It reads these from environment variables (for security and flexibility).
-    *   **`pool`:** It creates a "connection pool," which is an efficient way to manage multiple connections to the database.
-    *   **`connectDatabase()` & `disconnectDatabase()`:** Functions to explicitly connect to and disconnect from the database. These are used by the server and scripts.
-*   **`migrate.ts` & `migrationRunner.ts` & `migrations/` folder:**
-    *   **What it is (Migrations):** As the application evolves, the structure of the database (e.g., tables, columns) might need to change. "Migrations" are a way to manage these changes in a controlled, versioned manner. Each change is a new migration script.
-        *   Imagine your app initially only stored gym names. Later, you want to add addresses. A migration would be a script that adds an "address" column to the "gyms" table in the database.
-    *   **`migrations/` folder:** This folder contains the actual migration files (e.g., `001_initial_schema.ts`). Each file has an `up()` function (to apply the change) and a `down()` function (to undo the change, if needed).
-    *   **`migrationRunner.ts`:** This is the brain behind managing migrations. It:
-        *   Keeps track of which migrations have already been applied to the database (using a special `migrations` table it creates).
-        *   Can run new (pending) migrations (`runMigrations()`).
-        *   Can roll back (undo) the last applied migration (`rollbackLastMigration()`).
-        *   Can show the status of all migrations (`getMigrationStatus()`).
-    *   **`migrate.ts` (in `src/db/`):** Provides a simple function `runMigration()` that uses the `MigrationRunner` to apply migrations. This is likely used by the script in `scripts/migrate.ts`.
-*   **`seed.ts`:**
-    *   **What it does (Seeding):** This script (`seedData()`) populates the database with initial data. This is very useful for:
-        *   Setting up a new development environment with some sample gyms, trainers, etc., so developers can start working immediately.
-        *   Providing data for automated tests.
-    *   **Example:** It inserts sample provinces (Bangkok, Chiang Mai), users, class types (Basic Muay Thai), tags (Beginner Friendly), gyms (Lumpinee Gym), trainers, and connects them (e.g., this trainer teaches that class, this gym has these tags).
-*   **`reset.ts`:** (Likely used for testing or development)
-    *   **What it does:** This script seems designed to wipe out existing data from database tables. This is useful to get a clean slate before running tests or reseeding the database. **Caution:** This would delete data, so it's typically not for production.
+### 4.2. `src/db/` - Database Layer
 
-### 3.3. `src/routes/` - The API Endpoints (The Menu)
+This directory contains all database-related code using Drizzle ORM:
 
-This folder defines the actual "API endpoints" or "routes" that the app can call. Each file usually groups related endpoints. For example, `gyms.ts` handles all requests related to gyms.
+#### **`config.ts`** - Database Configuration
+*   Creates PostgreSQL connection pool using environment variables
+*   Exports the Drizzle ORM client (`db`) configured with the schema
+*   Provides `checkDatabaseConnection()` function for health checks
+*   Handles connection management and error handling
 
-*   **Example: `gyms.ts`**
-    *   **What it does:** Defines all the web addresses (URLs) the app can use to get or manipulate gym data.
-    *   **Key Functions (Endpoints):**
-        *   `GET /api/gyms`: Get a list of all active gyms.
-        *   `GET /api/gyms/:id`: Get details for a specific gym by its ID.
-        *   `GET /api/gyms/:id/images`: Get images for a specific gym.
-        *   `GET /api/gyms/province/:provinceId`: Get gyms located in a specific province.
-        *   `GET /api/gyms/search/:query`: Search for gyms based on a keyword.
-        *   `POST /api/gyms`: Create a new gym (the app sends gym details, the backend saves it).
-        *   `PUT /api/gyms/:id`: Update an existing gym.
-        *   `DELETE /api/gyms/:id`: "Soft delete" a gym (marks it as inactive, doesn't actually remove it from the database immediately).
-        *   `POST /api/gyms/:id/images`: Add an image to a gym.
-        *   `DELETE /api/gyms/images/:imageId`: Remove a gym image.
-    *   **How it works:**
-        1.  It receives a request from the app (e.g., for a list of gyms).
-        2.  It calls a corresponding function in a "service" (see `src/services/`) to do the actual work (like fetching data from the database).
-        3.  It then formats the result from the service into a standardized `ApiResponse` (see `src/types/`) and sends it back to the app.
-        4.  It includes error handling: if the service reports an error, the route sends an error response.
-*   **`trainers.ts`:** Works similarly to `gyms.ts` but for trainer-related data (getting trainer profiles, creating trainers, etc.).
+#### **`schema.ts`** - Database Schema Definition
+*   Defines all database tables using Drizzle's schema syntax
+*   **Core Tables**:
+    *   `users` - User accounts with roles
+    *   `provinces` - Thai provinces (bilingual: Thai/English)
+    *   `gyms` - Muay Thai training facilities
+    *   `trainers` - Individual trainers (can be gym-affiliated or freelance)
+    *   `classes` - Training class types
+    *   `tags` - Flexible categorization system
+*   **Junction Tables**:
+    *   `gymImages` - Gym photo galleries
+    *   `trainerClasses` - Many-to-many: trainers ↔ classes
+    *   `gymTags` - Many-to-many: gyms ↔ tags  
+    *   `trainerTags` - Many-to-many: trainers ↔ tags
+*   **Relations**: Defines how tables relate to each other using Drizzle's relations API
 
-### 3.4. `src/services/` - The Business Logic (The Chefs)
+#### **`migrate.ts`** - Migration Runner
+*   Executes database migrations using Drizzle's migration system
+*   Applies pending schema changes from the `migrations/` folder
+*   Handles connection management and error reporting
 
-This folder contains the "business logic" of the application. If routes are the waiters taking orders, services are the chefs who know how to prepare the dishes.
+#### **`migrations/`** - Version-Controlled Schema Changes
+*   Contains auto-generated SQL migration files created by `drizzle-kit generate`
+*   Each file represents incremental changes to the database schema
+*   Ensures consistent database state across environments
 
-*   **Example: `gymService.ts`**
-    *   **What it does:** Contains all the core functions for managing gym data. These functions interact directly with the database (using the `pool` from `src/db/config.ts`).
-    *   **Key Functions:**
-        *   `getAllGyms()`: Fetches all active gyms from the database, joining with the `provinces` table to include province names.
-        *   `getGymById(id)`: Fetches a single active gym by its ID.
-        *   `getGymImages(gymId)`: Fetches images for a specific gym.
-        *   `getGymsByProvince(provinceId)`: Fetches active gyms for a given province.
-        *   `createGym(gymData)`: Inserts a new gym record into the database. It generates a unique ID (`uuidv4`) for the new gym.
-        *   `updateGym(id, gymData)`: Updates an existing gym record. It dynamically builds the SQL `UPDATE` statement based on the fields provided.
-        *   `deleteGym(id)`: Performs a "soft delete" by setting `is_active = false` for a gym.
-        *   `addGymImage(gymId, imageUrl)`: Adds a new image record linked to a gym.
-        *   `removeGymImage(imageId)`: Deletes an image record.
-        *   `searchGyms(query)`: Searches for gyms where the query matches (case-insensitively) names, descriptions, or province names.
-    *   **How it works:**
-        1.  A function in `gymService.ts` (e.g., `getAllGyms()`) is called by a route handler in `gyms.ts`.
-        2.  It acquires a connection from the database `pool`.
-        3.  It executes SQL queries against the database to fetch or modify data.
-        4.  It processes the results from the database (if any).
-        5.  It returns the data (or a success/failure status) to the route handler.
-        6.  It releases the database connection back to the pool.
-*   **`trainerService.ts`:** Works similarly for trainer-related logic.
+#### **`seed.ts`** - Sample Data Population
+*   Populates the database with realistic sample data
+*   **Includes**:
+    *   5 Thai provinces (Bangkok, Chiang Mai, Phuket, etc.)
+    *   2 sample users (admin and regular user)
+    *   4 class types (Basic Muay Thai, Advanced, Kids, Cardio)
+    *   5 categorization tags
+    *   2 gyms with complete details and images
+    *   2 trainers with their class and tag associations
+*   Handles proper deletion order for foreign key constraints
+*   Includes relationship mappings (gym-tag, trainer-class connections)
 
-### 3.5. `src/types/` - Defining Data Shapes (The Recipe Ingredients List)
+### 4.3. `src/types/` - Type Definitions
 
-This folder (specifically `index.ts`) defines the "shape" or structure of the data objects used throughout the application. TypeScript uses these definitions to help catch errors and make the code easier to understand.
+#### **`index.ts`** - Comprehensive Type System
+*   **Database Entity Types**: Auto-inferred from Drizzle schema
+    *   `User`, `NewUser`, `Gym`, `NewGym`, `Trainer`, `NewTrainer`, etc.
+    *   Leverages Drizzle's `$inferSelect` and `$inferInsert` for type safety
+*   **API Request/Response Types**:
+    *   `ApiResponse<T>` - Standardized response wrapper
+    *   `CreateGymRequest`, `UpdateGymRequest` - Request DTOs
+    *   `GymWithDetails`, `TrainerWithDetails` - Enhanced response types with relations
+*   **Utility Types**:
+    *   `PaginatedResponse<T>` - For paginated results
+    *   Various specialized interfaces for complex operations
 
-*   **`index.ts`:**
-    *   **What it does:** Contains "interfaces." An interface is like a blueprint for an object, specifying what properties it should have and what type of data each property holds.
-    *   **Examples:**
-        *   `interface Gym { id: string; name_th: string; ... }`: Defines that a `Gym` object must have an `id` (which is text), a `name_th` (Thai name, text), etc.
-        *   `interface CreateGymRequest { ... }`: Defines the data expected when the app wants to create a new gym.
-        *   `interface ApiResponse<T> { ... }`: Defines a standard structure for all responses sent back to the app. It includes a `success` flag, optional `data` (of type `T`, meaning it can be any type of data like a `Gym` or `Trainer[]`), an optional `error` message, and an optional `message`. This consistency is good for the app developers.
-    *   **Why it's important:** These type definitions help ensure that different parts of the backend (and potentially the frontend app developers) agree on what the data looks like.
+### 4.4. `src/services/` - Business Logic Layer
 
-### 3.6. `src/__tests__/` - Automated Checks
+Contains the core business logic separated from API routing:
 
-This folder is where automated tests for the backend code would go. Tests are small programs that check if specific parts of the code are working correctly. (Currently, the content of this folder is not visible, but this is its standard purpose).
+#### **`gymService.ts`** - Gym Management Logic
+*   **Core Operations**:
+    *   `getAllGyms()` - Paginated gym listing with search and filtering
+    *   `getGymById()` - Single gym with full details (province, images, tags, trainers)
+    *   `createGym()`, `updateGym()`, `deleteGym()` - CRUD operations
+    *   `searchGyms()` - Full-text search across multiple fields
+*   **Image Management**:
+    *   `addGymImage()`, `removeGymImage()` - Image CRUD
+    *   `getGymImages()` - Retrieve all images for a gym
+*   **Filtering**:
+    *   `getGymsByProvince()` - Location-based filtering
+*   **Advanced Features**:
+    *   Pagination support with total count
+    *   Multi-field search (Thai/English names, descriptions)
+    *   Soft deletes (marks as inactive rather than deleting)
+    *   Complex joins for related data
 
-## 4. `scripts/` - Helper Tools
+#### **`trainerService.ts`** - Trainer Management Logic
+*   Similar structure to `gymService.ts` but focused on trainer operations
+*   Handles both gym-affiliated and freelance trainers
+*   Manages trainer-class and trainer-tag relationships
+*   Supports filtering by gym, province, or freelance status
 
-These are standalone programs used for development and management tasks.
+### 4.5. `src/routes/` - API Endpoint Definitions
 
-*   **`migrate.ts`:**
-    *   **What it does:** A simple script that runs the database migrations. When you run this (e.g., `bun run scripts/migrate.ts`), it tells the system to apply any pending database schema changes defined in `src/db/migrations/`.
-    *   **Why:** Used to update the database structure when new features are added or existing ones change.
-*   **`migration-rollback.ts`:**
-    *   **What it does:** Rolls back (undoes) the very last migration that was applied to the database.
-    *   **Why:** Useful if a recent migration caused an unexpected problem.
-*   **`migration-status.ts`:**
-    *   **What it does:** Shows which migrations have been applied to the database and which ones are still pending.
-    *   **Why:** Helps developers see the current state of the database schema.
-*   **`seed.ts`:**
-    *   **What it does:** Runs the database seeding process, populating the database with the initial data defined in `src/db/seed.ts`.
-    *   **Why:** To quickly set up a new database with sample data for development or testing.
+Defines the HTTP API interface using Fastify:
 
-## 5. How to Run the Project (Generally)
+#### **`gyms.ts`** - Gym API Endpoints
+*   **GET Routes**:
+    *   `/api/gyms` - List all gyms (with pagination, search, filtering)
+    *   `/api/gyms/:id` - Get specific gym with full details
+    *   `/api/gyms/:id/images` - Get gym images
+    *   `/api/gyms/province/:provinceId` - Get gyms by province
+    *   `/api/gyms/search/:query` - Search gyms
+*   **POST Routes**:
+    *   `/api/gyms` - Create new gym
+    *   `/api/gyms/:id/images` - Add gym image
+*   **PUT Routes**:
+    *   `/api/gyms/:id` - Update gym details
+*   **DELETE Routes**:
+    *   `/api/gyms/:id` - Soft delete gym
+    *   `/api/gyms/images/:imageId` - Remove gym image
 
-While specifics might vary slightly based on setup:
+#### **`trainers.ts`** - Trainer API Endpoints
+*   Similar REST pattern for trainer management
+*   Includes specialized endpoints for trainer-class relationships
+*   Supports filtering by various criteria (gym, province, freelance status)
 
-1.  **Install Dependencies:** Usually `bun install` (since there's a `bun.lock` file, Bun is the package manager). This downloads all the tools and libraries listed in `package.json`.
-2.  **Set up Environment Variables:**
-    *   Copy `env.example` to a new file named `.env`.
-    *   Edit `.env` and fill in your actual database connection details (host, port, username, password, database name).
-3.  **Ensure Database is Running:** The PostgreSQL database server needs to be running and accessible.
-4.  **Run Migrations:**
-    *   `bun run scripts/migrate.ts` (or similar command defined in `package.json`)
-    *   This creates the necessary tables in your database if they don't exist.
-5.  **(Optional) Seed Data:**
-    *   `bun run scripts/seed.ts` (or similar)
-    *   This fills the database with initial sample data.
-6.  **Start the Server:**
-    *   Usually a command like `bun run dev` or `bun run start` (check the `scripts` section in `package.json`).
-    *   This will typically start the server, and you'll see messages like "🚀 Server is running on http://localhost:3000".
-7.  **Access API Docs:** Open `http://localhost:3000/docs` in your browser to see the API documentation.
+**Response Format**: All endpoints return standardized `ApiResponse<T>` objects with:
+```typescript
+{
+  success: boolean,
+  data?: T,
+  message?: string,
+  error?: string,
+  statusCode?: number
+}
+```
 
-## 6. Key Concepts for Non-Backend Developers
+## 5. Database Design
 
-*   **API (Application Programming Interface):** A set of rules and definitions that allows different software applications to communicate with each other. In this case, the backend provides an API that the MyMuayThai app uses. The routes in `src/routes/` define this API.
-*   **HTTP Methods:**
-    *   `GET`: Used to retrieve data (e.g., get a list of gyms).
-    *   `POST`: Used to create new data (e.g., add a new gym).
-    *   `PUT`: Used to update existing data (e.g., change a gym's phone number).
-    *   `DELETE`: Used to delete data.
-*   **JSON (JavaScript Object Notation):** A lightweight format for exchanging data. The backend and the app mostly communicate by sending JSON data back and forth.
-*   **Database:** A structured system for storing and retrieving data. This project uses a relational database (likely PostgreSQL) where data is organized into tables (like spreadsheets), rows, and columns.
-*   **SQL (Structured Query Language):** The language used to interact with relational databases (to create tables, insert data, query data, etc.). The service files use SQL.
-*   **Environment Variables:** Variables (like database passwords or API keys) that are set outside the code, making the application more flexible and secure.
-*   **Asynchronous Operations (`async`/`await`):** Many operations, especially those involving databases or network requests, take time. `async` and `await` are keywords in TypeScript/JavaScript that help manage these operations without freezing the entire application while waiting. You'll see them used extensively.
+The system uses a well-structured relational database with:
 
-This manual should give you a solid foundation for understanding what the MyMuayThai backend does and how it's put together. If you have more specific questions as you explore, feel free to ask! 
+*   **Core Entities**: Users, Provinces, Gyms, Trainers, Classes, Tags
+*   **Relationship Tables**: Junction tables for many-to-many relationships
+*   **Data Integrity**: Foreign key constraints and proper normalization
+*   **Bilingual Support**: Thai and English fields throughout
+*   **Soft Deletes**: `is_active` flags instead of hard deletion
+*   **Timestamps**: Creation tracking for auditing
+
+## 6. Development Workflow
+
+### Available Scripts (package.json)
+```bash
+bun run dev          # Start development server with hot reload
+bun run build        # Build for production
+bun run start        # Start production server
+bun run lint         # Run ESLint
+bun run format       # Format code with Prettier
+bun run db:generate  # Generate new migrations from schema changes
+bun run db:migrate   # Apply pending migrations
+bun run db:seed      # Populate database with sample data
+bun run db:studio    # Open Drizzle Studio (database GUI)
+```
+
+### Development Process
+1. **Environment Setup**: Copy `env.example` to `.env` and configure database
+2. **Database Setup**: Run migrations and seeding
+3. **Development**: Use `bun run dev` for hot-reload development
+4. **Schema Changes**: Modify `src/db/schema.ts`, then generate and apply migrations
+5. **Testing**: Access API docs at `http://localhost:4000/docs`
+
+## 7. Key Concepts for Non-Backend Developers
+
+*   **ORM (Object-Relational Mapping)**: Drizzle ORM translates TypeScript code to SQL, providing type safety and easier database operations
+*   **RESTful API**: Standard HTTP methods (GET, POST, PUT, DELETE) for different operations
+*   **Type Safety**: TypeScript ensures data consistency between database, API, and client applications
+*   **Migrations**: Version-controlled database changes that can be applied/rolled back systematically
+*   **Soft Deletes**: Marking records as inactive instead of deleting them, preserving data integrity
+*   **Junction Tables**: Handle many-to-many relationships (e.g., one gym can have many tags, one tag can apply to many gyms)
+*   **Pagination**: Breaking large result sets into smaller, manageable chunks
+*   **Foreign Keys**: Database constraints that maintain referential integrity between related tables
+
+## 8. API Documentation
+
+The system automatically generates comprehensive API documentation using Swagger/OpenAPI 3.0:
+
+*   **Live Documentation**: Available at `http://localhost:4000/docs` when server is running
+*   **Interactive Testing**: Test API endpoints directly from the documentation
+*   **Schema Definitions**: View all request/response models
+*   **Example Requests**: See sample data for each endpoint
+
+## 9. Security & Best Practices
+
+*   **Input Validation**: Type-safe validation using TypeScript interfaces
+*   **SQL Injection Protection**: Parameterized queries via Drizzle ORM
+*   **CORS Configuration**: Proper cross-origin resource sharing setup
+*   **Security Headers**: Helmet middleware for common security protections
+*   **Environment Variables**: Sensitive configuration stored outside code
+*   **Error Handling**: Consistent error responses without exposing internal details
+
+## 10. Future Extensibility
+
+The architecture is designed for easy extension:
+
+*   **Authentication**: Can easily add JWT-based auth with role-based permissions
+*   **File Uploads**: Infrastructure ready for image upload services
+*   **Caching**: Can add Redis for performance optimization
+*   **Real-time Features**: WebSocket support for live updates
+*   **Multi-tenancy**: Database design supports multiple organizations
+*   **Mobile API**: RESTful design compatible with mobile app development
+
+This manual provides a complete overview of the MyMuayThai backend architecture. The system is built with modern best practices, type safety, and scalability in mind, making it maintainable and extensible for future growth. 

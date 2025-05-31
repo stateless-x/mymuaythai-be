@@ -1,274 +1,320 @@
 # MyMuayThai Backend Platform
 
-A comprehensive backend platform for managing Muay Thai gyms and trainers in Thailand, built with Bun, TypeScript, Fastify, and PostgreSQL.
+A comprehensive backend platform for managing Muay Thai gyms and trainers in Thailand, built with Bun, TypeScript, Fastify, Drizzle ORM, and PostgreSQL.
 
 ## 🥊 Features
 
-- **Gym Management**: Complete CRUD operations for Muay Thai gyms
-- **Trainer Management**: Manage trainers, both gym-affiliated and freelance
-- **Province-based Location**: Thai province support with bilingual content
-- **Multi-language Support**: Thai and English content
-- **Image Management**: Upload and manage gym images
-- **Class Management**: Define and assign training classes to trainers
-- **Tag System**: Categorize gyms and trainers with flexible tagging
-- **Search Functionality**: Full-text search across gyms and trainers
-- **RESTful API**: Clean, documented API endpoints
-- **Type Safety**: Full TypeScript implementation
-- **Database Migrations**: Automated database setup and seeding
+- **Gym Management**: Complete CRUD operations for Muay Thai gyms with images, tags, and location data
+- **Trainer Management**: Manage trainers (both gym-affiliated and freelance) with class assignments and specializations
+- **Province-based Location**: Thai province support with bilingual content (Thai/English)
+- **Multi-language Support**: Full bilingual content throughout the platform
+- **Advanced Search**: Full-text search across gyms and trainers with filtering capabilities
+- **Class & Tag System**: Flexible categorization with many-to-many relationships
+- **RESTful API**: Clean, well-documented API endpoints with OpenAPI 3.0 specification
+- **Type Safety**: Full TypeScript implementation with Drizzle ORM type inference
+- **Database Migrations**: Automated schema management with Drizzle Kit
+- **Sample Data**: Comprehensive seeding system for development and testing
 
 ## 🛠️ Tech Stack
 
-- **Runtime**: Bun (latest)
-- **Language**: TypeScript
-- **Framework**: Fastify
-- **Database**: PostgreSQL
-- **Documentation**: Swagger/OpenAPI 3.0
-- **Security**: Helmet, CORS
+- **Runtime**: [Bun](https://bun.sh/) (v1.0+) - Fast JavaScript runtime and package manager
+- **Language**: TypeScript - Type-safe development
+- **Framework**: [Fastify](https://www.fastify.io/) - High-performance web framework
+- **Database**: PostgreSQL (v13+) - Robust relational database
+- **ORM**: [Drizzle ORM](https://orm.drizzle.team/) - Modern, type-safe database toolkit
+- **Documentation**: Swagger/OpenAPI 3.0 - Auto-generated interactive API docs
+- **Security**: Helmet, CORS - Security middleware and protection
 
 ## 📋 Prerequisites
 
-- [Bun](https://bun.sh/) (v1.0+)
-- [PostgreSQL](https://postgresql.org/) (v13+)
+- [Bun](https://bun.sh/) v1.0 or higher
+- [PostgreSQL](https://postgresql.org/) v13 or higher
 - [Git](https://git-scm.com/)
 
 ## 🚀 Quick Start
 
 ### 1. Clone the Repository
 
-\`\`\`bash
+```bash
 git clone <repository-url>
 cd mymuaythai-be
-\`\`\`
+```
 
 ### 2. Install Dependencies
 
-\`\`\`bash
+```bash
 bun install
-\`\`\`
+```
 
 ### 3. Database Setup
 
 Create a PostgreSQL database:
 
-\`\`\`sql
+```sql
 CREATE DATABASE mymuaythai;
-CREATE USER postgres WITH PASSWORD 'password';
-GRANT ALL PRIVILEGES ON DATABASE mymuaythai TO postgres;
-\`\`\`
+CREATE USER admin WITH PASSWORD 'admin';
+GRANT ALL PRIVILEGES ON DATABASE mymuaythai TO admin;
+```
 
 ### 4. Environment Configuration
 
 Create environment file from example:
 
-\`\`\`bash
+```bash
 cp env.example .env
-\`\`\`
+```
 
 Update `.env` with your database credentials:
 
-\`\`\`env
+```env
+# Database Configuration
 DB_HOST=localhost
 DB_PORT=5432
 DB_NAME=mymuaythai
-DB_USER=postgres
-DB_PASSWORD=your_password
-\`\`\`
+DB_USER=admin
+DB_PASSWORD=admin
+
+# Server Configuration
+PORT=3000
+HOST=0.0.0.0
+NODE_ENV=development
+
+# API Configuration
+API_VERSION=1.0.0
+API_TITLE="MyMuayThai API"
+API_DESCRIPTION="API for managing Muay Thai gyms and trainers"
+```
 
 ### 5. Database Migration & Seeding
 
-Reset database (this will create tables and insert sample data):
+Run migrations and populate with sample data:
 
-\`\`\`bash
-bun run db:reset
-\`\`\`
+```bash
+# Generate migration files (if schema changed)
+bun run db:generate
 
-Or run individually:
-
-\`\`\`bash
-# Create tables
+# Apply migrations to database
 bun run db:migrate
 
-# Insert sample data
+# Populate with sample data
 bun run db:seed
-\`\`\`
+```
 
 ### 6. Start Development Server
 
-\`\`\`bash
+```bash
 bun run dev
-\`\`\`
+```
 
-The server will start at: http://localhost:3000
+The server will start at: **http://localhost:4000**
 
 ## 📚 API Documentation
 
-Once the server is running, visit:
+Once the server is running, access:
 
-- **Swagger UI**: http://localhost:3000/docs
-- **Health Check**: http://localhost:3000/health
+- **Swagger UI**: http://localhost:4000/docs - Interactive API documentation
+- **Health Check**: http://localhost:4000/health - Server status endpoint
 
 ## 🗄️ Database Schema
 
-The platform uses the following main entities:
+The platform uses a well-structured relational database with:
 
 ### Core Tables
 
-- **users**: User accounts with roles
-- **provinces**: Thai provinces (bilingual)
-- **gyms**: Muay Thai training facilities
-- **trainers**: Individual trainers
-- **classes**: Training class types
-- **tags**: Categorization labels
+- **users**: User accounts with role-based access
+- **provinces**: Thai provinces with bilingual names
+- **gyms**: Muay Thai training facilities with complete details
+- **trainers**: Individual trainers (gym-affiliated or freelance)
+- **classes**: Training class types and descriptions
+- **tags**: Flexible categorization labels
 
 ### Junction Tables
 
 - **gym_images**: Gym photo galleries
-- **trainer_classes**: Trainer-class assignments
-- **gym_tags**: Gym categorization
-- **trainer_tags**: Trainer categorization
+- **trainer_classes**: Trainer-class assignments (many-to-many)
+- **gym_tags**: Gym categorization (many-to-many)
+- **trainer_tags**: Trainer specializations (many-to-many)
+
+### Key Features
+
+- **UUID Primary Keys**: All entities use UUID for better distribution
+- **Bilingual Support**: Thai and English fields throughout
+- **Soft Deletes**: `is_active` flags preserve data integrity
+- **Foreign Key Constraints**: Proper referential integrity
+- **Timestamps**: Creation tracking for auditing
 
 ## 🔌 API Endpoints
 
 ### Gyms
 
-- `GET /api/gyms` - Get all gyms
-- `GET /api/gyms/:id` - Get gym by ID
+- `GET /api/gyms` - List all gyms (with pagination, search, province filtering)
+- `GET /api/gyms/:id` - Get specific gym with full details
 - `GET /api/gyms/:id/images` - Get gym images
 - `GET /api/gyms/province/:provinceId` - Get gyms by province
-- `GET /api/gyms/search/:query` - Search gyms
+- `GET /api/gyms/search/:query` - Search gyms by name/description
 - `POST /api/gyms` - Create new gym
-- `PUT /api/gyms/:id` - Update gym
+- `PUT /api/gyms/:id` - Update gym details
 - `DELETE /api/gyms/:id` - Soft delete gym
 - `POST /api/gyms/:id/images` - Add gym image
 - `DELETE /api/gyms/images/:imageId` - Remove gym image
 
 ### Trainers
 
-- `GET /api/trainers` - Get all trainers
-- `GET /api/trainers/:id` - Get trainer by ID
+- `GET /api/trainers` - List all trainers (with filtering options)
+- `GET /api/trainers/:id` - Get specific trainer with details
 - `GET /api/trainers/gym/:gymId` - Get trainers by gym
 - `GET /api/trainers/province/:provinceId` - Get trainers by province
 - `GET /api/trainers/freelance` - Get freelance trainers
-- `GET /api/trainers/:id/classes` - Get trainer classes
+- `GET /api/trainers/:id/classes` - Get trainer's classes
 - `GET /api/trainers/search/:query` - Search trainers
 - `POST /api/trainers` - Create new trainer
-- `PUT /api/trainers/:id` - Update trainer
+- `PUT /api/trainers/:id` - Update trainer details
 - `DELETE /api/trainers/:id` - Soft delete trainer
 - `POST /api/trainers/:id/classes` - Add class to trainer
 - `DELETE /api/trainers/:id/classes/:classId` - Remove class from trainer
 
-## 🧪 Testing
+### Response Format
 
-Run the test suite:
+All API responses follow a consistent structure:
 
-\`\`\`bash
-bun run test
-\`\`\`
-
-Or run the custom test runner:
-
-\`\`\`bash
-bun run src/__tests__/runTests.ts
-\`\`\`
-
-## 📦 Available Scripts
-
-- `bun run dev` - Start development server with hot reload
-- `bun run build` - Build for production
-- `bun run start` - Start production server
-- `bun run test` - Run test suite
-- `bun run db:migrate` - Run database migrations
-- `bun run db:seed` - Seed database with sample data
-- `bun run db:reset` - Reset database (migrate + seed)
-
-## 🏗️ Project Structure
-
-\`\`\`
-src/
-├── db/
-│   ├── config.ts          # Database configuration
-│   ├── migrate.ts         # Database migrations
-│   ├── seed.ts           # Sample data seeding
-│   └── reset.ts          # Database reset utility
-├── routes/
-│   ├── gyms.ts           # Gym API routes
-│   └── trainers.ts       # Trainer API routes
-├── services/
-│   ├── gymService.ts     # Gym business logic
-│   └── trainerService.ts # Trainer business logic
-├── types/
-│   └── index.ts          # TypeScript interfaces
-├── __tests__/
-│   ├── gym.test.ts       # Gym service tests
-│   └── runTests.ts       # Test runner
-└── server.ts             # Main application entry
-\`\`\`
-
-## 🔧 Configuration
-
-### Environment Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `DB_HOST` | Database host | `localhost` |
-| `DB_PORT` | Database port | `5432` |
-| `DB_NAME` | Database name | `mymuaythai` |
-| `DB_USER` | Database user | `postgres` |
-| `DB_PASSWORD` | Database password | `password` |
-| `PORT` | Server port | `3000` |
-| `HOST` | Server host | `0.0.0.0` |
-| `NODE_ENV` | Environment | `development` |
-
-## 🗺️ Sample Data
-
-The seeding script includes:
-
-- **10 Thai provinces** (Bangkok, Chiang Mai, Phuket, etc.)
-- **5 Famous Muay Thai gyms** (Lumpinee, Fairtex, Tiger Muay Thai, etc.)
-- **5 Professional trainers** with different specializations
-- **Training classes** (Basic Muay Thai, Advanced, Boxing, etc.)
-- **Tags** for categorization (Beginner Friendly, Professional, etc.)
-
-## 🚦 API Response Format
-
-All API responses follow a consistent format:
-
-\`\`\`json
+```json
 {
   "success": true,
   "data": {...},
   "message": "Operation completed successfully"
 }
-\`\`\`
+```
 
 Error responses:
 
-\`\`\`json
+```json
 {
   "success": false,
   "error": "Error message",
   "statusCode": 400
 }
-\`\`\`
+```
+
+## 🧪 Testing
+
+The project includes comprehensive test coverage:
+
+```bash
+# Run test suite (when implemented)
+bun run test
+
+# Or run individual test files
+bun run __tests__/services/gymService.test.ts
+```
+
+## 📦 Available Scripts
+
+```bash
+# Development
+bun run dev          # Start development server with hot reload
+bun run build        # Build for production
+bun run start        # Start production server
+
+# Code Quality
+bun run lint         # Run ESLint
+bun run format       # Format code with Prettier
+
+# Database Operations
+bun run db:generate  # Generate new migrations from schema changes
+bun run db:migrate   # Apply pending migrations to database
+bun run db:seed      # Populate database with sample data
+bun run db:studio    # Open Drizzle Studio (visual database browser)
+```
+
+## 🏗️ Project Structure
+
+```
+src/
+├── db/
+│   ├── config.ts              # Database connection and Drizzle setup
+│   ├── schema.ts              # Database schema definitions
+│   ├── migrate.ts             # Migration runner script
+│   ├── seed.ts                # Sample data population
+│   └── migrations/            # Auto-generated migration files
+├── routes/
+│   ├── gyms.ts               # Gym API endpoints
+│   └── trainers.ts           # Trainer API endpoints
+├── services/
+│   ├── gymService.ts         # Gym business logic
+│   └── trainerService.ts     # Trainer business logic
+├── types/
+│   └── index.ts              # TypeScript type definitions
+└── server.ts                 # Main application entry point
+
+__tests__/
+└── services/                 # Service layer tests
+
+drizzle.config.ts             # Drizzle ORM configuration
+package.json                  # Dependencies and scripts
+tsconfig.json                 # TypeScript configuration
+env.example                   # Environment variables template
+```
+
+## 🔧 Configuration
+
+### Environment Variables
+
+| Variable | Description | Default | Required |
+|----------|-------------|---------|----------|
+| `DB_HOST` | Database host | `localhost` | ✅ |
+| `DB_PORT` | Database port | `5432` | ✅ |
+| `DB_NAME` | Database name | `mymuaythai` | ✅ |
+| `DB_USER` | Database user | `admin` | ✅ |
+| `DB_PASSWORD` | Database password | `admin` | ✅ |
+| `PORT` | Server port | `3000` | ❌ |
+| `HOST` | Server host | `0.0.0.0` | ❌ |
+| `NODE_ENV` | Environment | `development` | ❌ |
+
+## 🗺️ Sample Data
+
+The seeding script includes comprehensive sample data:
+
+- **5 Thai Provinces**: Bangkok, Chiang Mai, Phuket, Chon Buri, Surat Thani
+- **2 Users**: Admin and regular user accounts
+- **4 Class Types**: Basic Muay Thai, Advanced, Kids classes, Cardio Muay Thai
+- **5 Tags**: Beginner Friendly, For Professionals, Good Atmosphere, Fully Equipped, English Speaking
+- **2 Gyms**: Yodmuay Gym Bangkok & Lanna Muay Thai Chiang Mai (with images and complete details)
+- **2 Trainers**: Experienced trainers with class assignments and specializations
+- **Relationships**: All many-to-many relationships properly connected
 
 ## 🔒 Security Features
 
 - **CORS**: Configurable cross-origin resource sharing
-- **Helmet**: Security headers middleware
-- **Input Validation**: Type-safe request validation
-- **SQL Injection Protection**: Parameterized queries
+- **Helmet**: Security headers middleware (CSP, XSS protection, etc.)
+- **Input Validation**: Type-safe request validation with TypeScript
+- **SQL Injection Protection**: Parameterized queries via Drizzle ORM
 - **Soft Deletes**: Data preservation with active flags
+- **Environment Variables**: Sensitive configuration kept outside codebase
 
-## 🎯 Future Enhancements
+## 🎯 Development Features
 
-- [ ] Authentication & Authorization (JWT)
-- [ ] File upload for gym images
-- [ ] Booking system for training sessions
-- [ ] Rating and review system
-- [ ] Real-time notifications
-- [ ] Mobile app API extensions
-- [ ] Admin dashboard integration
-- [ ] Multi-tenant support
+- **Hot Reload**: Development server with automatic restart on file changes
+- **Type Safety**: Full TypeScript coverage with Drizzle ORM type inference
+- **Auto-generated Types**: Database schema types automatically inferred
+- **API Documentation**: Interactive Swagger UI with live testing
+- **Database GUI**: Drizzle Studio for visual database management
+- **Structured Logging**: Beautiful console output with pino-pretty
+- **Error Handling**: Comprehensive error handling with proper HTTP status codes
+
+## 🚀 Future Enhancements
+
+Planned features and improvements:
+
+- [ ] **Authentication & Authorization**: JWT-based auth with role-based permissions
+- [ ] **File Upload Service**: Image upload with cloud storage integration
+- [ ] **Booking System**: Training session reservation functionality
+- [ ] **Rating & Reviews**: User feedback system for gyms and trainers
+- [ ] **Real-time Features**: WebSocket support for live updates
+- [ ] **Caching Layer**: Redis integration for improved performance
+- [ ] **Admin Dashboard**: Web-based administration interface
+- [ ] **Mobile API Extensions**: Additional endpoints for mobile app features
+- [ ] **Multi-tenant Support**: Support for multiple gym chains
+- [ ] **Advanced Analytics**: Reporting and analytics dashboard
 
 ## 🤝 Contributing
 
@@ -278,6 +324,14 @@ Error responses:
 4. Push to the branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
 
+### Development Guidelines
+
+- Follow TypeScript best practices and maintain type safety
+- Use Drizzle ORM for all database operations
+- Write comprehensive tests for new features
+- Update API documentation for new endpoints
+- Follow the existing code structure and naming conventions
+
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
@@ -286,9 +340,19 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - Built with [Bun](https://bun.sh/) - The fast all-in-one JavaScript runtime
 - [Fastify](https://www.fastify.io/) - Fast and low overhead web framework
+- [Drizzle ORM](https://orm.drizzle.team/) - Modern TypeScript ORM
 - [PostgreSQL](https://postgresql.org/) - The world's most advanced open source database
-- Thai Muay Thai community for inspiration
+- Thai Muay Thai community for inspiration and cultural authenticity
 
 ---
 
-**Made with ❤️ for the Muay Thai community in Thailand** 🇹🇭 
+**Made with ❤️ for the Muay Thai community in Thailand** 🇹🇭
+
+## 🆘 Support
+
+If you encounter any issues or have questions:
+
+1. Check the [API documentation](http://localhost:4000/docs) when server is running
+2. Review the [Code Manual](documents/code-manual.md) for detailed architecture information
+3. Create an issue in the repository with detailed information about the problem
+4. For development questions, refer to the comprehensive type definitions and inline comments 

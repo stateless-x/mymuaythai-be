@@ -4,18 +4,24 @@
   "description": "MyMuayThai Backend Platform for managing gyms and trainers",
   "main": "src/server.ts",
   "scripts": {
-    "dev": "bun run --watch src/server.ts",
-    "build": "bun build src/server.ts --outdir ./dist --target bun",
+    "dev": "bun run --hot src/server.ts",
+    "build": "bun build src/server.ts --outdir dist --target node",
     "start": "bun run dist/server.js",
-    "test": "bun run src/__tests__/runTests.ts",
-    "test:setup": "bun run src/db/reset.ts",
+    "lint": "eslint . --ext .ts",
+    "format": "prettier --write .",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "db:generate": "drizzle-kit generate",
     "db:migrate": "bun run src/db/migrate.ts",
     "db:seed": "bun run src/db/seed.ts",
-    "db:reset": "bun run src/db/reset.ts",
-    "db:status": "bun run scripts/migration-status.ts",
-    "db:rollback": "bun run scripts/migration-rollback.ts"
+    "db:studio": "drizzle-kit studio"
   },
-  "keywords": ["muaythai", "gym", "trainer", "fastify", "postgresql"],
+  "keywords": [
+    "muaythai",
+    "gym",
+    "trainer",
+    "fastify",
+    "postgresql"
+  ],
   "author": "Your Name",
   "license": "MIT",
   "dependencies": {
@@ -23,15 +29,18 @@
     "@fastify/helmet": "^11.1.1",
     "@fastify/swagger": "^8.14.0",
     "@fastify/swagger-ui": "^2.1.0",
+    "drizzle-kit": "^0.31.1",
+    "drizzle-orm": "^0.44.1",
     "fastify": "^4.26.2",
-    "pg": "^8.11.3",
+    "pg": "^8.16.0",
     "uuid": "^9.0.1"
   },
   "devDependencies": {
+    "@types/dotenv": "^8.2.3",
     "@types/node": "^20.11.24",
     "@types/pg": "^8.11.2",
     "@types/uuid": "^9.0.8",
-    "bun-types": "latest",
+    "bun-types": "^1.2.15",
     "pino-pretty": "^13.0.0",
     "typescript": "^5.3.3"
   }

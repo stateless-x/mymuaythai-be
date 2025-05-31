@@ -1,50 +1,35 @@
-import { Pool, PoolConfig } from 'pg';
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { Pool } from 'pg';
+import * as dotenv from 'dotenv';
+import * as schema from './schema';
 
-// Database configuration
-const dbConfig: PoolConfig = {
-  host: process.env.DB_HOST || 'localhost',
-  port: parseInt(process.env.DB_PORT || '5432'),
-  database: process.env.DB_NAME || 'muaythai_dev',
-  user: process.env.DB_USER || 'admin',
-  password: process.env.DB_PASSWORD || 'admin',
-  max: 20,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
-};
+dotenv.config(); // Load environment variables from .env file
 
-// Create the database connection pool
-export const pool = new Pool(dbConfig);
+if (!process.env.DB_HOST || !process.env.DB_PORT || !process.env.DB_USER || !process.env.DB_PASSWORD || !process.env.DB_NAME) {
+  throw new Error('Missing required database environment variables');
+}
 
-// Track if pool is ended
-let isPoolEnded = false;
+export const pool = new Pool({
+  host: process.env.DB_HOST,
+  port: parseInt(process.env.DB_PORT, 10),
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME,
+});
 
-// Test database connection
-export const connectDatabase = async (): Promise<void> => {
+export const db = drizzle(pool, { schema });
+
+// No need for connectDatabase and disconnectDatabase with Drizzle's approach typically,
+// as connections are managed per-query or via a long-lived pool.
+// If explicit connection management is needed for scripts, it can be handled differently.
+
+export async function checkDatabaseConnection(): Promise<void> {
   try {
-    const client = await pool.connect();
-    console.log('✅ Database connected successfully');
-    client.release();
+    // Perform a simple query to check the connection
+    await db.select({ count: schema.provinces.id }).from(schema.provinces).limit(1);
+    console.log('Successfully connected to the database and performed a query.');
   } catch (error) {
-    console.error('❌ Database connection failed:', error);
-    throw error;
+    console.error('Failed to connect to the database or perform a query:', error);
+    throw error; // Re-throw the error to indicate failure
   }
-};
-
-// Close database connection
-export const disconnectDatabase = async (): Promise<void> => {
-  try {
-    if (!isPoolEnded) {
-      await pool.end();
-      isPoolEnded = true;
-      console.log('✅ Database disconnected successfully');
-    }
-  } catch (error) {
-    console.error('❌ Database disconnection failed:', error);
-    throw error;
-  }
-};
-
-// Reset pool state (for testing)
-export const resetPoolState = (): void => {
-  isPoolEnded = false;
-}; 
+} 
