@@ -14,20 +14,22 @@ A comprehensive backend platform for managing Muay Thai gyms and trainers in Tha
 - **Type Safety**: Full TypeScript implementation with Drizzle ORM type inference
 - **Database Migrations**: Automated schema management with Drizzle Kit
 - **Sample Data**: Comprehensive seeding system for development and testing
+- **Pagination**: Advanced pagination support for all major endpoints (20 items per page default)
 
 ## 🛠️ Tech Stack
 
-- **Runtime**: [Bun](https://bun.sh/) (v1.0+) - Fast JavaScript runtime and package manager
+- **Runtime**: [Bun](https://bun.sh/) (v1.2+) - Fast JavaScript runtime and package manager
 - **Language**: TypeScript - Type-safe development
 - **Framework**: [Fastify](https://www.fastify.io/) - High-performance web framework
 - **Database**: PostgreSQL (v13+) - Robust relational database
 - **ORM**: [Drizzle ORM](https://orm.drizzle.team/) - Modern, type-safe database toolkit
 - **Documentation**: Swagger/OpenAPI 3.0 - Auto-generated interactive API docs
 - **Security**: Helmet, CORS - Security middleware and protection
+- **Testing**: Bun built-in test runner with comprehensive service layer tests
 
 ## 📋 Prerequisites
 
-- [Bun](https://bun.sh/) v1.0 or higher
+- [Bun](https://bun.sh/) v1.2 or higher
 - [PostgreSQL](https://postgresql.org/) v13 or higher
 - [Git](https://git-scm.com/)
 
@@ -96,8 +98,11 @@ bun run db:generate
 # Apply migrations to database
 bun run db:migrate
 
-# Populate with sample data
+# Populate with sample data (5 provinces, 2 gyms, 2 trainers, classes, tags)
 bun run db:seed
+
+# Or seed all 77 Thai provinces for production
+bun run db:seed:provinces
 ```
 
 ### 6. Start Development Server
@@ -106,14 +111,14 @@ bun run db:seed
 bun run dev
 ```
 
-The server will start at: **http://localhost:4000**
+The server will start at: **http://localhost:3000**
 
 ## 📚 API Documentation
 
 Once the server is running, access:
 
-- **Swagger UI**: http://localhost:4000/docs - Interactive API documentation
-- **Health Check**: http://localhost:4000/health - Server status endpoint
+- **Swagger UI**: http://localhost:3000/docs - Interactive API documentation
+- **Health Check**: http://localhost:3000/health - Server status endpoint
 
 ## 🗄️ Database Schema
 
@@ -230,15 +235,23 @@ Error responses:
 
 ## 🧪 Testing
 
-The project includes comprehensive test coverage:
+The project includes comprehensive test coverage using Bun's built-in test runner:
 
 ```bash
-# Run test suite (when implemented)
-bun run test
+# Run all tests
+bun test
 
-# Or run individual test files
-bun run __tests__/services/gymService.test.ts
+# Run specific test files
+bun test __tests__/services/gymService.test.ts
+bun test __tests__/services/trainerService.test.ts
+
+# Run tests with watch mode
+bun test --watch
 ```
+
+### Test Coverage
+- **GymService**: Complete CRUD operations, pagination, search, filtering, image management
+- **TrainerService**: Full trainer lifecycle, class assignments, freelance filtering, advanced search
 
 ## 📦 Available Scripts
 
@@ -258,6 +271,10 @@ bun run db:migrate   # Apply pending migrations to database
 bun run db:seed      # Populate database with sample data
 bun run db:seed:provinces  # Seed all 77 Thai provinces
 bun run db:studio    # Open Drizzle Studio (visual database browser)
+
+# Testing
+bun test            # Run all tests
+bun test --watch    # Run tests in watch mode
 ```
 
 ## 🏗️ Project Structure
@@ -277,7 +294,7 @@ src/
 │   └── provinces.ts          # Province API endpoints (read-only)
 ├── services/
 │   ├── gymService.ts         # Gym business logic
-│   ├── trainerService.ts     # Trainer business logic
+│   ├── trainerService.ts     # Trainer business logic (Drizzle ORM)
 │   └── provinceService.ts    # Province business logic
 ├── types/
 │   └── index.ts              # TypeScript type definitions
@@ -285,6 +302,8 @@ src/
 
 __tests__/
 └── services/                 # Service layer tests
+    ├── gymService.test.ts    # Comprehensive gym service tests
+    └── trainerService.test.ts # Complete trainer service tests
 
 drizzle.config.ts             # Drizzle ORM configuration
 package.json                  # Dependencies and scripts
@@ -311,12 +330,13 @@ env.example                   # Environment variables template
 
 The seeding script includes comprehensive sample data:
 
-- **77 Thai Provinces**: All provinces of Thailand with accurate Thai and English names, organized by regions
+- **5 Sample Provinces**: Bangkok, Chiang Mai, Phuket, Chon Buri, Surat Thani for testing
+- **77 Thai Provinces**: All provinces of Thailand with accurate Thai and English names (via province-seed)
 - **2 Users**: Admin and regular user accounts  
 - **4 Class Types**: Basic Muay Thai, Advanced, Kids classes, Cardio Muay Thai
 - **5 Tags**: Beginner Friendly, For Professionals, Good Atmosphere, Fully Equipped, English Speaking
 - **2 Gyms**: Yodmuay Gym Bangkok & Lanna Muay Thai Chiang Mai (with images and complete details)
-- **2 Trainers**: Experienced trainers with class assignments and specializations
+- **2 Trainers**: Kru Yod (gym-affiliated) & Kru Kaew (freelance) with class assignments and specializations
 - **Relationships**: All many-to-many relationships properly connected
 
 ### Province Data Organization
@@ -347,6 +367,7 @@ The 77 provinces are organized into 6 geographical regions:
 - **Database GUI**: Drizzle Studio for visual database management
 - **Structured Logging**: Beautiful console output with pino-pretty
 - **Error Handling**: Comprehensive error handling with proper HTTP status codes
+- **Comprehensive Testing**: Bun test runner with full service layer coverage
 
 ## 🚀 Future Enhancements
 
@@ -399,7 +420,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 If you encounter any issues or have questions:
 
-1. Check the [API documentation](http://localhost:4000/docs) when server is running
+1. Check the [API documentation](http://localhost:3000/docs) when server is running
 2. Review the [Code Manual](documents/code-manual.md) for detailed architecture information
 3. Create an issue in the repository with detailed information about the problem
 4. For development questions, refer to the comprehensive type definitions and inline comments 

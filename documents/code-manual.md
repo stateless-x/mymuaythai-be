@@ -11,18 +11,20 @@ This backend is the core engine behind the MyMuayThai application, responsible f
 *   **Business Logic**: Handling complex operations like search, filtering, relationships between entities
 *   **Data Integrity**: Ensuring consistent and reliable data through proper validation and constraints
 *   **Scalability**: Built with modern tools (Bun, Fastify, Drizzle ORM) for high performance
+*   **Pagination**: Advanced pagination support for efficient data loading (default 20 items per page)
 
 Think of it as the foundation that powers everything - when you search for gyms in Bangkok or view a trainer's profile, this backend processes those requests and delivers the data.
 
 ## 2. Technology Stack
 
-*   **Runtime**: Bun (fast JavaScript runtime and package manager)
+*   **Runtime**: Bun v1.2+ (fast JavaScript runtime and package manager with built-in test runner)
 *   **Language**: TypeScript (for type safety and better development experience)
 *   **Web Framework**: Fastify (high-performance web framework)
 *   **Database**: PostgreSQL (robust relational database)
 *   **ORM**: Drizzle ORM (modern, type-safe database toolkit)
 *   **Documentation**: Swagger/OpenAPI 3.0 (auto-generated API docs)
 *   **Security**: Helmet, CORS (security middleware)
+*   **Testing**: Bun built-in test runner with comprehensive service layer tests
 
 ## 3. Project Structure Overview
 
@@ -35,6 +37,7 @@ mymuaythai-be/
 │   ├── types/              # TypeScript type definitions
 │   └── server.ts           # Main application entry point
 ├── __tests__/              # Test files
+│   └── services/           # Service layer tests
 ├── drizzle.config.ts       # Drizzle ORM configuration
 ├── package.json            # Dependencies and scripts
 ├── tsconfig.json           # TypeScript configuration
@@ -63,7 +66,7 @@ The main server file that bootstraps the entire application:
 *   Health check endpoint at `/health`
 *   API documentation available at `/docs`
 *   Structured logging with pino-pretty
-*   Environment-based configuration (PORT, HOST)
+*   Environment-based configuration (PORT defaults to 3000, HOST defaults to 0.0.0.0)
 
 ### 4.2. `src/db/` - Database Layer
 
@@ -102,14 +105,14 @@ This directory contains all database-related code using Drizzle ORM:
 *   Ensures consistent database state across environments
 
 #### **`seed.ts`** - Sample Data Population
-*   Populates the database with realistic sample data
+*   Populates the database with realistic sample data for development
 *   **Includes**:
-    *   5 Thai provinces (Bangkok, Chiang Mai, Phuket, etc.) for testing
+    *   5 Thai provinces (Bangkok, Chiang Mai, Phuket, Chon Buri, Surat Thani) for testing
     *   2 sample users (admin and regular user)
     *   4 class types (Basic Muay Thai, Advanced, Kids, Cardio)
     *   5 categorization tags
     *   2 gyms with complete details and images
-    *   2 trainers with their class and tag associations
+    *   2 trainers (Kru Yod - gym-affiliated, Kru Kaew - freelance) with their class and tag associations
 *   Handles proper deletion order for foreign key constraints
 *   Includes relationship mappings (gym-tag, trainer-class connections)
 
@@ -138,7 +141,7 @@ This directory contains all database-related code using Drizzle ORM:
     *   `CreateGymRequest`, `UpdateGymRequest` - Request DTOs
     *   `GymWithDetails`, `TrainerWithDetails` - Enhanced response types with relations
 *   **Utility Types**:
-    *   `PaginatedResponse<T>` - For paginated results
+    *   `PaginatedResponse<T>` - For paginated results with items, total, page, pageSize, totalPages
     *   Various specialized interfaces for complex operations
 
 ### 4.4. `src/services/` - Business Logic Layer
@@ -147,26 +150,40 @@ Contains the core business logic separated from API routing:
 
 #### **`gymService.ts`** - Gym Management Logic
 *   **Core Operations**:
-    *   `getAllGyms()` - Paginated gym listing with search and filtering
+    *   `getAllGyms()` - Paginated gym listing with search and filtering (default 10 items per page, configurable)
     *   `getGymById()` - Single gym with full details (province, images, tags, trainers)
     *   `createGym()`, `updateGym()`, `deleteGym()` - CRUD operations
-    *   `searchGyms()` - Full-text search across multiple fields
+    *   `searchGyms()` - Full-text search across multiple fields with pagination
 *   **Image Management**:
     *   `addGymImage()`, `removeGymImage()` - Image CRUD
     *   `getGymImages()` - Retrieve all images for a gym
 *   **Filtering**:
     *   `getGymsByProvince()` - Location-based filtering
 *   **Advanced Features**:
-    *   Pagination support with total count
-    *   Multi-field search (Thai/English names, descriptions)
+    *   Pagination support with total count calculation
+    *   Multi-field search (Thai/English names, descriptions, province data)
     *   Soft deletes (marks as inactive rather than deleting)
-    *   Complex joins for related data
+    *   Complex joins for related data using Drizzle ORM
 
-#### **`trainerService.ts`** - Trainer Management Logic
-*   Similar structure to `gymService.ts` but focused on trainer operations
-*   Handles both gym-affiliated and freelance trainers
-*   Manages trainer-class and trainer-tag relationships
-*   Supports filtering by gym, province, or freelance status
+#### **`trainerService.ts`** - Trainer Management Logic (Fully Converted to Drizzle ORM)
+*   **Comprehensive Drizzle Implementation**: Completely converted from raw SQL to Drizzle ORM
+*   **Core Operations**:
+    *   `getAllTrainers()` - Advanced paginated listing with multiple filter options (default 20 items per page)
+    *   `getTrainerById()` - Single trainer with full details and relationships
+    *   `createTrainer()`, `updateTrainer()`, `deleteTrainer()` - Complete CRUD operations
+    *   `searchTrainers()` - Full-text search across names, bio, province, and gym data
+*   **Relationship Management**:
+    *   `addTrainerClass()`, `removeTrainerClass()` - Trainer-class associations
+    *   `getTrainerClasses()` - Retrieve trainer's assigned classes
+*   **Advanced Filtering**:
+    *   `getTrainersByGym()` - Filter by gym with pagination
+    *   `getTrainersByProvince()` - Filter by province with pagination
+    *   `getFreelanceTrainers()` - Filter freelance trainers with pagination
+*   **Query Features**:
+    *   Complex multi-table searches including province and gym data
+    *   Support for multiple simultaneous filters (search + province + gym + freelance status)
+    *   Proper handling of nullable relationships (freelance trainers)
+    *   Type-safe operations with `TrainerWithDetails` response mapping
 
 #### **`provinceService.ts`** - Province Management Logic (Read-Only)
 *   **Core Operations**:
@@ -192,7 +209,7 @@ Defines the HTTP API interface using Fastify:
     *   `/api/gyms/:id` - Get specific gym with full details
     *   `/api/gyms/:id/images` - Get gym images
     *   `/api/gyms/province/:provinceId` - Get gyms by province
-    *   `/api/gyms/search/:query` - Search gyms
+    *   `/api/gyms/search/:query` - Search gyms with pagination
 *   **POST Routes**:
     *   `/api/gyms` - Create new gym
     *   `/api/gyms/:id/images` - Add gym image
@@ -203,9 +220,22 @@ Defines the HTTP API interface using Fastify:
     *   `/api/gyms/images/:imageId` - Remove gym image
 
 #### **`trainers.ts`** - Trainer API Endpoints
-*   Similar REST pattern for trainer management
-*   Includes specialized endpoints for trainer-class relationships
-*   Supports filtering by various criteria (gym, province, freelance status)
+*   **GET Routes**:
+    *   `/api/trainers` - List all trainers with advanced filtering and pagination
+    *   `/api/trainers/:id` - Get specific trainer with full details
+    *   `/api/trainers/gym/:gymId` - Get trainers by gym with pagination
+    *   `/api/trainers/province/:provinceId` - Get trainers by province with pagination
+    *   `/api/trainers/freelance` - Get freelance trainers with pagination
+    *   `/api/trainers/:id/classes` - Get trainer's classes
+    *   `/api/trainers/search/:query` - Search trainers with pagination
+*   **POST Routes**:
+    *   `/api/trainers` - Create new trainer
+    *   `/api/trainers/:id/classes` - Add class to trainer
+*   **PUT Routes**:
+    *   `/api/trainers/:id` - Update trainer details
+*   **DELETE Routes**:
+    *   `/api/trainers/:id` - Soft delete trainer
+    *   `/api/trainers/:id/classes/:classId` - Remove class from trainer
 
 #### **`provinces.ts`** - Province API Endpoints (Read-Only)
 *   **GET Routes**:
@@ -256,16 +286,41 @@ bun run db:migrate   # Apply pending migrations
 bun run db:seed      # Populate database with sample data
 bun run db:seed:provinces  # Seed all 77 Thai provinces for production
 bun run db:studio    # Open Drizzle Studio (database GUI)
+bun test            # Run all tests
+bun test --watch    # Run tests in watch mode
 ```
 
 ### Development Process
 1. **Environment Setup**: Copy `env.example` to `.env` and configure database
 2. **Database Setup**: Run migrations and seeding
-3. **Development**: Use `bun run dev` for hot-reload development
+3. **Development**: Use `bun run dev` for hot-reload development (server starts on port 3000)
 4. **Schema Changes**: Modify `src/db/schema.ts`, then generate and apply migrations
-5. **Testing**: Access API docs at `http://localhost:4000/docs`
+5. **Testing**: Access API docs at `http://localhost:3000/docs` or run `bun test`
 
-## 7. Key Concepts for Non-Backend Developers
+## 7. Testing Infrastructure
+
+### Comprehensive Test Coverage
+*   **Test Framework**: Bun built-in test runner
+*   **Test Location**: `__tests__/services/` directory
+*   **Coverage Areas**:
+    *   **GymService Tests**: Complete CRUD operations, pagination, search, filtering, image management
+    *   **TrainerService Tests**: Full trainer lifecycle, class assignments, freelance filtering, advanced search with pagination
+
+### Test Features
+*   **Database Setup**: Each test suite creates and cleans up test data
+*   **Relationship Testing**: Tests many-to-many relationships (trainer-classes, gym-tags)
+*   **Pagination Testing**: Validates pagination logic and total counts
+*   **Error Handling**: Tests edge cases and error conditions
+*   **Foreign Key Testing**: Validates referential integrity
+
+### Running Tests
+```bash
+bun test                              # Run all tests
+bun test __tests__/services/          # Run service tests
+bun test --watch                      # Watch mode for development
+```
+
+## 8. Key Concepts for Non-Backend Developers
 
 *   **ORM (Object-Relational Mapping)**: Drizzle ORM translates TypeScript code to SQL, providing type safety and easier database operations
 *   **RESTful API**: Standard HTTP methods (GET, POST, PUT, DELETE) for different operations
@@ -273,19 +328,19 @@ bun run db:studio    # Open Drizzle Studio (database GUI)
 *   **Migrations**: Version-controlled database changes that can be applied/rolled back systematically
 *   **Soft Deletes**: Marking records as inactive instead of deleting them, preserving data integrity
 *   **Junction Tables**: Handle many-to-many relationships (e.g., one gym can have many tags, one tag can apply to many gyms)
-*   **Pagination**: Breaking large result sets into smaller, manageable chunks
+*   **Pagination**: Breaking large result sets into smaller, manageable chunks (20 items per page for trainers, 10-20 for gyms)
 *   **Foreign Keys**: Database constraints that maintain referential integrity between related tables
 
-## 8. API Documentation
+## 9. API Documentation
 
 The system automatically generates comprehensive API documentation using Swagger/OpenAPI 3.0:
 
-*   **Live Documentation**: Available at `http://localhost:4000/docs` when server is running
+*   **Live Documentation**: Available at `http://localhost:3000/docs` when server is running
 *   **Interactive Testing**: Test API endpoints directly from the documentation
 *   **Schema Definitions**: View all request/response models
 *   **Example Requests**: See sample data for each endpoint
 
-## 9. Security & Best Practices
+## 10. Security & Best Practices
 
 *   **Input Validation**: Type-safe validation using TypeScript interfaces
 *   **SQL Injection Protection**: Parameterized queries via Drizzle ORM
@@ -294,7 +349,7 @@ The system automatically generates comprehensive API documentation using Swagger
 *   **Environment Variables**: Sensitive configuration stored outside code
 *   **Error Handling**: Consistent error responses without exposing internal details
 
-## 10. Future Extensibility
+## 11. Future Extensibility
 
 The architecture is designed for easy extension:
 
@@ -305,4 +360,4 @@ The architecture is designed for easy extension:
 *   **Multi-tenancy**: Database design supports multiple organizations
 *   **Mobile API**: RESTful design compatible with mobile app development
 
-This manual provides a complete overview of the MyMuayThai backend architecture. The system is built with modern best practices, type safety, and scalability in mind, making it maintainable and extensible for future growth. 
+This manual provides a complete overview of the MyMuayThai backend architecture. The system is built with modern best practices, type safety, comprehensive testing, and scalability in mind, making it maintainable and extensible for future growth. 
