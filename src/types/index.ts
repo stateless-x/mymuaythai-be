@@ -109,4 +109,8 @@ export interface PaginatedResponse<T> {
   page: number;
   pageSize: number;
   totalPages: number;
-} 
+}
+
+// Specific paginated responses for type safety
+export interface PaginatedGymResponse extends PaginatedResponse<GymWithDetails> {}
+export interface PaginatedTrainerResponse extends PaginatedResponse<TrainerWithDetails> {} 

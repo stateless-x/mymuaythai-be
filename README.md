@@ -160,41 +160,61 @@ The platform uses a well-structured relational database with:
 
 ### Gyms
 
-- `GET /api/gyms` - List all gyms (with pagination, search, province filtering)
+- `GET /api/gyms` - List all gyms with pagination, search, and filtering
 - `GET /api/gyms/:id` - Get specific gym with full details
 - `GET /api/gyms/:id/images` - Get gym images
 - `GET /api/gyms/province/:provinceId` - Get gyms by province
-- `GET /api/gyms/search/:query` - Search gyms by name/description
+- `GET /api/gyms/search/:query` - Search gyms by name/description with pagination
 - `POST /api/gyms` - Create new gym
 - `PUT /api/gyms/:id` - Update gym details
 - `DELETE /api/gyms/:id` - Soft delete gym
 - `POST /api/gyms/:id/images` - Add gym image
 - `DELETE /api/gyms/images/:imageId` - Remove gym image
 
+**Gym Query Parameters:**
+- `?page=1` - Page number (default: 1)
+- `?pageSize=20` - Items per page (default: 20)
+- `?search=term` - Search by name or description
+- `?provinceId=16` - Filter by province
+
 ### Trainers
 
-- `GET /api/trainers` - List all trainers (with filtering options)
-- `GET /api/trainers/:id` - Get specific trainer with details
-- `GET /api/trainers/gym/:gymId` - Get trainers by gym
-- `GET /api/trainers/province/:provinceId` - Get trainers by province
-- `GET /api/trainers/freelance` - Get freelance trainers
+- `GET /api/trainers` - List all trainers with pagination and advanced filtering
+- `GET /api/trainers/:id` - Get specific trainer with full details (includes province, gym, classes, tags)
+- `GET /api/trainers/gym/:gymId` - Get trainers by gym with pagination
+- `GET /api/trainers/province/:provinceId` - Get trainers by province with pagination
+- `GET /api/trainers/freelance` - Get freelance trainers with pagination
 - `GET /api/trainers/:id/classes` - Get trainer's classes
-- `GET /api/trainers/search/:query` - Search trainers
+- `GET /api/trainers/search/:query` - Search trainers with pagination
 - `POST /api/trainers` - Create new trainer
 - `PUT /api/trainers/:id` - Update trainer details
 - `DELETE /api/trainers/:id` - Soft delete trainer
 - `POST /api/trainers/:id/classes` - Add class to trainer
 - `DELETE /api/trainers/:id/classes/:classId` - Remove class from trainer
 
-### Response Format
+**Trainer Query Parameters:**
+- `?page=1` - Page number (default: 1)
+- `?pageSize=20` - Items per page (default: 20)
+- `?search=term` - Search by name, bio, province, or gym
+- `?provinceId=16` - Filter by province
+- `?gymId=uuid` - Filter by gym
+- `?isFreelance=true` - Filter freelance trainers
 
-All API responses follow a consistent structure:
+### Pagination Response Format
+
+All paginated endpoints return data in this format:
 
 ```json
 {
   "success": true,
-  "data": {...},
-  "message": "Operation completed successfully"
+  "data": {
+    "items": [...],        // Array of results
+    "total": 42,          // Total number of items
+    "page": 1,            // Current page
+    "pageSize": 20,       // Items per page
+    "totalPages": 3       // Total number of pages
+  },
+  "message": "Items retrieved successfully"
 }
 ```
 

@@ -1,17 +1,37 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { GymService } from '../services/gymService';
-import { CreateGymRequest, ApiResponse } from '../types';
+import { CreateGymRequest, ApiResponse, PaginatedResponse, GymWithDetails } from '../types';
 
 const gymService = new GymService();
 
 export async function gymRoutes(fastify: FastifyInstance) {
-  // Get all gyms
-  fastify.get('/gyms', async (request: FastifyRequest, reply: FastifyReply) => {
+  // Get all gyms with pagination
+  fastify.get('/gyms', async (request: FastifyRequest<{
+    Querystring: { 
+      page?: string;
+      pageSize?: string;
+      search?: string;
+      provinceId?: string;
+    }
+  }>, reply: FastifyReply) => {
     try {
-      const gyms = await gymService.getAllGyms();
-      const response: ApiResponse<typeof gyms> = {
+      const page = parseInt(request.query.page || '1');
+      const pageSize = parseInt(request.query.pageSize || '20');
+      const searchTerm = request.query.search;
+      const provinceId = request.query.provinceId ? parseInt(request.query.provinceId) : undefined;
+
+      const { gyms, total } = await gymService.getAllGyms(page, pageSize, searchTerm, provinceId);
+      const totalPages = Math.ceil(total / pageSize);
+      
+      const response: ApiResponse<PaginatedResponse<GymWithDetails>> = {
         success: true,
-        data: gyms,
+        data: {
+          items: gyms,
+          total,
+          page,
+          pageSize,
+          totalPages
+        },
         message: 'Gyms retrieved successfully'
       };
       return reply.code(200).send(response);
@@ -96,14 +116,30 @@ export async function gymRoutes(fastify: FastifyInstance) {
   });
 
   // Search gyms
-  fastify.get('/gyms/search/:query', async (request: FastifyRequest<{ Params: { query: string } }>, reply: FastifyReply) => {
+  fastify.get('/gyms/search/:query', async (request: FastifyRequest<{ 
+    Params: { query: string };
+    Querystring: { 
+      page?: string;
+      pageSize?: string;
+    }
+  }>, reply: FastifyReply) => {
     try {
       const { query } = request.params;
-      const gyms = await gymService.searchGyms(query);
+      const page = parseInt(request.query.page || '1');
+      const pageSize = parseInt(request.query.pageSize || '20');
       
-      const response: ApiResponse<typeof gyms> = {
+      const { gyms, total } = await gymService.searchGyms(query, page, pageSize);
+      const totalPages = Math.ceil(total / pageSize);
+      
+      const response: ApiResponse<PaginatedResponse<GymWithDetails>> = {
         success: true,
-        data: gyms,
+        data: {
+          items: gyms,
+          total,
+          page,
+          pageSize,
+          totalPages
+        },
         message: 'Search results retrieved successfully'
       };
       return reply.code(200).send(response);
