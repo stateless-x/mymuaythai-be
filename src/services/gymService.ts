@@ -13,6 +13,8 @@ import {
   Trainer
 } from '../types';
 import { eq, ilike, and, or, desc, sql, count, SQL } from 'drizzle-orm';
+import { createGymSchema, updateGymSchema, formatZodError } from '../utils/validation';
+import { z } from 'zod';
 
 // Helper type for base Gym selected with province
 type GymWithProvince = Omit<Gym, 'province_id'> & { // province_id is still there from Gym, but we replace its meaning with the object
@@ -182,36 +184,51 @@ export class GymService {
   }
 
   async createGym(gymData: CreateGymRequest): Promise<Gym> {
-    const result = await db.insert(schema.gyms)
-      .values(gymData as NewGym) 
-      .returning(); 
-    if (!result || result.length === 0) throw new Error('Gym creation failed, no data returned.');
-    return result[0]!;
+    try {
+      const validatedData = createGymSchema.parse(gymData);
+      
+      const result = await db.insert(schema.gyms)
+        .values(validatedData as NewGym)
+        .returning();
+      
+      if (!result || result.length === 0) {
+        throw new Error('Gym creation failed, no data returned.');
+      }
+      
+      return result[0]!;
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new Error(`Validation failed: ${formatZodError(error)}`);
+      }
+      throw error;
+    }
   }
 
   async updateGym(id: string, gymData: UpdateGymRequest): Promise<Gym | null> {
-    if (Object.keys(gymData).length === 0) {
-      // If no data to update, fetch and return current gym data
-      const currentGymWithDetails = await this.getGymById(id);
-      if (!currentGymWithDetails) return null;
-      
-      // Convert GymWithDetails back to basic Gym type
-      const {
-        province,
-        images,
-        tags,
-        associatedTrainers,
-        ...gymBasicData
-      } = currentGymWithDetails;
-      
-      return gymBasicData as Gym;
+    // Validate input ID
+    if (!id || typeof id !== 'string') {
+      throw new Error('Invalid gym ID provided');
     }
-    
-    const result = await db.update(schema.gyms)
-      .set(gymData) 
-      .where(and(eq(schema.gyms.id, id), eq(schema.gyms.is_active, true)))
-      .returning();
-    return result.length > 0 ? result[0]! : null;
+
+    try {
+      const validatedData = updateGymSchema.parse(gymData);
+
+      const result = await db.update(schema.gyms)
+        .set(validatedData)
+        .where(and(
+          eq(schema.gyms.id, id), 
+          eq(schema.gyms.is_active, true)
+        ))
+        .returning();
+
+      return result.length > 0 ? result[0]! : null;
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new Error(`Validation failed: ${formatZodError(error)}`);
+      }
+      console.error('Error updating gym:', error);
+      throw new Error('Failed to update gym');
+    }
   }
 
   async deleteGym(id: string): Promise<boolean> {

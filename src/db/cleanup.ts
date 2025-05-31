@@ -56,15 +56,25 @@ export async function cleanupAllData() {
   }
 }
 
-// Allow script to be run directly
-if (require.main === module) {
-  cleanupAllData()
-    .then(() => {
-      console.log('🎉 Cleanup script completed successfully!');
-      process.exit(0);
-    })
-    .catch((error) => {
-      console.error('💥 Cleanup script failed:', error);
-      process.exit(1);
-    });
+async function main() {
+  try {
+    console.log('Starting database cleanup...');
+    
+    // Drop all data but keep structure
+    await cleanupAllData();
+    
+    console.log('✅ Database cleanup completed successfully');
+    process.exit(0);
+  } catch (error: any) {
+    console.error('❌ Database cleanup failed:', error);
+    process.exit(1);
+  }
+}
+
+// Export for programmatic use
+export { cleanupAllData as cleanup };
+
+// Run if called directly
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main();
 } 

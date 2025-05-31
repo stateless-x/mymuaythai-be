@@ -12,6 +12,7 @@ This backend is the core engine behind the MyMuayThai application, responsible f
 *   **Data Integrity**: Ensuring consistent and reliable data through proper validation and constraints
 *   **Scalability**: Built with modern tools (Bun, Fastify, Drizzle ORM) for high performance
 *   **Pagination**: Advanced pagination support for efficient data loading (default 20 items per page)
+*   **Automated Database Seeding**: Comprehensive automation for setting up development, testing, and production environments
 
 Think of it as the foundation that powers everything - when you search for gyms in Bangkok or view a trainer's profile, this backend processes those requests and delivers the data.
 
@@ -25,6 +26,7 @@ Think of it as the foundation that powers everything - when you search for gyms 
 *   **Documentation**: Swagger/OpenAPI 3.0 (auto-generated API docs)
 *   **Security**: Helmet, CORS (security middleware)
 *   **Testing**: Bun built-in test runner with comprehensive service layer tests
+*   **Database Management**: Automated seeding with conflict resolution and idempotent operations
 
 ## 3. Project Structure Overview
 
@@ -32,6 +34,13 @@ Think of it as the foundation that powers everything - when you search for gyms 
 mymuaythai-be/
 ├── src/                    # Core application code
 │   ├── db/                 # Database configuration and operations
+│   │   ├── config.ts       # Database connection setup
+│   │   ├── schema.ts       # Database schema definitions
+│   │   ├── migrate.ts      # Migration runner
+│   │   ├── seed.ts         # Comprehensive sample data seeding
+│   │   ├── dev-seed.ts     # Essential development data seeding
+│   │   ├── province-seed.ts # All 76 Thai provinces seeding
+│   │   └── migrations/     # Version-controlled schema changes
 │   ├── routes/             # API endpoint definitions
 │   ├── services/           # Business logic layer
 │   ├── types/              # TypeScript type definitions
@@ -39,10 +48,11 @@ mymuaythai-be/
 ├── __tests__/              # Test files
 │   └── services/           # Service layer tests
 ├── drizzle.config.ts       # Drizzle ORM configuration
-├── package.json            # Dependencies and scripts
+├── package.json            # Dependencies and automated scripts
 ├── tsconfig.json           # TypeScript configuration
 ├── env.example             # Environment variables template
 └── documents/              # Documentation files
+    └── code-manual.md      # This comprehensive guide
 ```
 
 ## 4. Deep Dive into `src/` (The Core Logic)
@@ -104,20 +114,34 @@ This directory contains all database-related code using Drizzle ORM:
 *   Each file represents incremental changes to the database schema
 *   Ensures consistent database state across environments
 
-#### **`seed.ts`** - Sample Data Population
-*   Populates the database with realistic sample data for development
-*   **Includes**:
-    *   5 Thai provinces (Bangkok, Chiang Mai, Phuket, Chon Buri, Surat Thani) for testing
-    *   2 sample users (admin and regular user)
-    *   4 class types (Basic Muay Thai, Advanced, Kids, Cardio)
-    *   5 categorization tags
-    *   2 gyms with complete details and images
-    *   2 trainers (Kru Yod - gym-affiliated, Kru Kaew - freelance) with their class and tag associations
-*   Handles proper deletion order for foreign key constraints
-*   Includes relationship mappings (gym-tag, trainer-class connections)
+#### **`seed.ts`** - Comprehensive Sample Data Seeding
+*   **Enhanced with Conflict Resolution**: Uses `onConflictDoNothing()` for idempotent operations
+*   **Comprehensive Sample Data**:
+    *   5 complete Muay Thai gyms across different provinces with realistic details
+    *   5 professional trainers with varied specializations (gym-affiliated and freelance)
+    *   5 training classes with Thai and English descriptions
+    *   5 useful categorization tags
+    *   Complete relationship mappings (gym-tag, trainer-class associations)
+*   **Safe Execution**: Can be run multiple times without causing duplicate key errors
+*   **Realistic Data**: All content includes proper Thai language support
+*   **Foreign Key Compliance**: All relationships use correct province IDs from the database
+
+#### **`dev-seed.ts`** - Essential Development Data Seeding (NEW)
+*   **Lightweight Development Setup**: Optimized for quick development environment setup
+*   **Essential Data Only**:
+    *   5 key provinces (Bangkok, Chiang Mai, Phuket, Chon Buri, Surat Thani)
+    *   3 development users (admin, dev, test accounts)
+    *   4 essential Muay Thai classes
+    *   5 useful categorization tags
+    *   2 sample gyms (Dev Muay Thai Gym, Test Fight Club)
+    *   2 sample trainers (one gym-based, one freelance)
+    *   Sample relationships between entities
+*   **Idempotent Operations**: Safe to run multiple times with conflict resolution
+*   **Development Focused**: Includes test accounts and development-friendly data
+*   **Relationship Management**: Properly handles many-to-many relationships with safety checks
 
 #### **`province-seed.ts`** - Production Province Data
-*   Dedicated seeding script for all 77 Thai provinces
+*   Dedicated seeding script for all 76 Thai provinces
 *   **Complete Coverage**: All official provinces with accurate Thai and English names
 *   **Regional Organization**: Provinces organized by 6 geographical regions
 *   **Production Ready**: Designed for production environment use
@@ -274,30 +298,81 @@ The system uses a well-structured relational database with:
 
 ## 6. Development Workflow
 
-### Available Scripts (package.json)
+### Available Scripts (package.json) - ENHANCED AUTOMATION
+
 ```bash
+# Development
 bun run dev          # Start development server with hot reload
 bun run build        # Build for production
 bun run start        # Start production server
 bun run lint         # Run ESLint
 bun run format       # Format code with Prettier
-bun run db:generate  # Generate new migrations from schema changes
-bun run db:migrate   # Apply pending migrations
-bun run db:seed      # Populate database with comprehensive sample data (gyms, trainers, relationships)
-bun run db:seed:provinces  # Seed all 77 Thai provinces for production
-bun run db:seed:dev  # Seed essential data for development (provinces, users, classes, tags only)
-bun run db:cleanup   # Clean up all data from database (for production deployment)
-bun run db:studio    # Open Drizzle Studio (database GUI)
 bun test            # Run all tests
 bun test --watch    # Run tests in watch mode
+
+# Database Schema Management
+bun run db:generate  # Generate new migrations from schema changes
+bun run db:migrate   # Apply pending migrations
+bun run db:studio    # Open Drizzle Studio (database GUI)
+
+# Database Seeding (NEW AUTOMATION)
+bun run db:seed:provinces    # Seed all 76 Thai provinces (production ready)
+bun run db:seed:dev         # Seed essential development data (recommended for dev)
+bun run db:seed             # Seed comprehensive sample data (full demo/testing)
+
+# Database Management (NEW AUTOMATED WORKFLOWS)
+bun run db:cleanup          # Clean all data from database
+bun run db:reset            # Cleanup + migrate (fresh database)
+bun run db:fresh            # Reset + provinces + essential dev data
+bun run db:fresh:full       # Reset + provinces + comprehensive sample data
+bun run setup:dev           # Migrate + provinces + dev data (first-time setup)
 ```
+
+### Automated Seeding Workflows (NEW)
+
+**For New Developers (Recommended):**
+```bash
+bun run setup:dev
+```
+*   Runs database migrations
+*   Seeds all Thai provinces
+*   Adds essential development data (users, gyms, trainers, classes, tags)
+*   Sets up sample relationships
+*   Perfect for first-time development environment setup
+
+**For Demo/Testing:**
+```bash
+bun run db:fresh:full
+```
+*   Resets the entire database
+*   Runs migrations
+*   Seeds all provinces and comprehensive sample data
+*   Ideal for demonstrations or testing with realistic data
+
+**For Clean Development Restart:**
+```bash
+bun run db:fresh
+```
+*   Resets the database
+*   Sets up essential development data only
+*   Quick way to start with a clean slate
+
+### Seeding Features (NEW)
+
+*   **✅ Idempotent**: All seeding scripts can be run multiple times safely
+*   **✅ Conflict Resolution**: Uses `ON CONFLICT DO NOTHING` strategy
+*   **✅ Realistic Data**: Thai language support with proper province associations
+*   **✅ Relationship Mapping**: Proper foreign key relationships
+*   **✅ Development Ready**: Includes test accounts and sample entities
+*   **✅ Error Handling**: Comprehensive error handling and logging
 
 ### Development Process
 1. **Environment Setup**: Copy `env.example` to `.env` and configure database
-2. **Database Setup**: Run migrations and seeding
+2. **First-Time Setup**: Run `bun run setup:dev` for complete development environment
 3. **Development**: Use `bun run dev` for hot-reload development (server starts on port 3000)
 4. **Schema Changes**: Modify `src/db/schema.ts`, then generate and apply migrations
 5. **Testing**: Access API docs at `http://localhost:3000/docs` or run `bun test`
+6. **Data Reset**: Use `bun run db:fresh` when you need a clean development environment
 
 ## 7. Testing Infrastructure
 
@@ -322,7 +397,62 @@ bun test __tests__/services/          # Run service tests
 bun test --watch                      # Watch mode for development
 ```
 
-## 8. Key Concepts for Non-Backend Developers
+## 8. Database Seeding System (COMPREHENSIVE NEW SECTION)
+
+The MyMuayThai backend includes a sophisticated database seeding system designed for different environments and use cases:
+
+### 8.1. Seeding Scripts Overview
+
+| Script | Purpose | Data Included | Use Case |
+|--------|---------|---------------|----------|
+| `bun run db:seed:provinces` | Foundation data | All 76 Thai provinces | Production setup |
+| `bun run db:seed:dev` | Development essentials | 5 provinces, 2 gyms, 2 trainers, classes, tags | Quick dev setup |
+| `bun run db:seed` | Comprehensive demo | 5 gyms, 5 trainers, complete relationships | Full testing/demo |
+
+### 8.2. Automated Workflow Scripts
+
+| Script | Process | Best For |
+|--------|---------|----------|
+| `bun run setup:dev` | Migrate → Provinces → Dev data | New developers |
+| `bun run db:fresh` | Reset → Migrate → Provinces → Dev data | Clean dev restart |
+| `bun run db:fresh:full` | Reset → Migrate → Provinces → Full data | Demo preparation |
+| `bun run db:reset` | Cleanup → Migrate | Database schema updates |
+
+### 8.3. Sample Data Details
+
+#### Development Data (`db:seed:dev`)
+*   **Provinces**: Bangkok, Chiang Mai, Phuket, Chon Buri, Surat Thani
+*   **Users**: admin@mymuaythai.dev, dev@mymuaythai.dev, test@mymuaythai.dev
+*   **Gyms**: 
+    *   Dev Muay Thai Gym (Bangkok) - Development testing facility
+    *   Test Fight Club (Chiang Mai) - System testing facility
+*   **Trainers**:
+    *   Dev Trainer - Gym-based trainer for development
+    *   Test Instructor - Freelance instructor for testing
+*   **Classes**: Basic, Advanced, Kids, Cardio Muay Thai
+*   **Tags**: Beginner Friendly, Professional, Good Atmosphere, Fully Equipped, English Speaking
+
+#### Comprehensive Data (`db:seed`)
+*   **All development data above, plus:**
+*   **Additional Gyms**: Siam Thai Fitness, Champion Muay Thai Gym, Ratchadamnoen Muay Thai
+*   **Additional Trainers**: Somchai Phetdam, Wichai Seehamat, Arun Changphueak, etc.
+*   **Complete Relationships**: Full gym-tag and trainer-class associations
+
+### 8.4. Conflict Resolution Features
+
+*   **Idempotent Operations**: All scripts use `onConflictDoNothing()` for safe re-execution
+*   **Foreign Key Validation**: Proper province ID references to prevent constraint violations
+*   **Relationship Safety**: Conditional relationship creation with existence checks
+*   **Error Handling**: Comprehensive error logging and graceful failure handling
+
+### 8.5. Production Considerations
+
+*   **Province Data**: Production-ready with all 76 official Thai provinces
+*   **Regional Organization**: Proper geographical grouping (Central, Eastern, Northern, etc.)
+*   **Bilingual Support**: Accurate Thai and English province names
+*   **Scalable Design**: Database structure supports thousands of gyms and trainers
+
+## 9. Key Concepts for Non-Backend Developers
 
 *   **ORM (Object-Relational Mapping)**: Drizzle ORM translates TypeScript code to SQL, providing type safety and easier database operations
 *   **RESTful API**: Standard HTTP methods (GET, POST, PUT, DELETE) for different operations
@@ -332,8 +462,10 @@ bun test --watch                      # Watch mode for development
 *   **Junction Tables**: Handle many-to-many relationships (e.g., one gym can have many tags, one tag can apply to many gyms)
 *   **Pagination**: Breaking large result sets into smaller, manageable chunks (20 items per page for trainers, 10-20 for gyms)
 *   **Foreign Keys**: Database constraints that maintain referential integrity between related tables
+*   **Idempotent Operations**: Database operations that can be safely repeated without causing errors or inconsistencies
+*   **Conflict Resolution**: Handling situations where data already exists during seeding operations
 
-## 9. API Documentation
+## 10. API Documentation
 
 The system automatically generates comprehensive API documentation using Swagger/OpenAPI 3.0:
 
@@ -342,7 +474,7 @@ The system automatically generates comprehensive API documentation using Swagger
 *   **Schema Definitions**: View all request/response models
 *   **Example Requests**: See sample data for each endpoint
 
-## 10. Security & Best Practices
+## 11. Security & Best Practices
 
 *   **Input Validation**: Type-safe validation using TypeScript interfaces
 *   **SQL Injection Protection**: Parameterized queries via Drizzle ORM
@@ -350,8 +482,10 @@ The system automatically generates comprehensive API documentation using Swagger
 *   **Security Headers**: Helmet middleware for common security protections
 *   **Environment Variables**: Sensitive configuration stored outside code
 *   **Error Handling**: Consistent error responses without exposing internal details
+*   **Database Integrity**: Foreign key constraints and proper normalization
+*   **Conflict Resolution**: Safe data seeding with duplicate handling
 
-## 11. Future Extensibility
+## 12. Future Extensibility
 
 The architecture is designed for easy extension:
 
@@ -361,5 +495,7 @@ The architecture is designed for easy extension:
 *   **Real-time Features**: WebSocket support for live updates
 *   **Multi-tenancy**: Database design supports multiple organizations
 *   **Mobile API**: RESTful design compatible with mobile app development
+*   **Advanced Analytics**: Reporting and analytics capabilities
+*   **Automated Deployment**: Seeding scripts ready for CI/CD integration
 
-This manual provides a complete overview of the MyMuayThai backend architecture. The system is built with modern best practices, type safety, comprehensive testing, and scalability in mind, making it maintainable and extensible for future growth. 
+This manual provides a complete overview of the MyMuayThai backend architecture. The system is built with modern best practices, comprehensive automation, type safety, and scalability in mind, making it maintainable and extensible for future growth. The enhanced seeding system ensures that developers can quickly set up any environment configuration, from minimal development setups to full-featured demo environments. 

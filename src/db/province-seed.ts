@@ -255,15 +255,24 @@ export async function seedAllProvinces() {
   }
 }
 
-// Run this file directly to seed provinces
-if (require.main === module) {
-  seedAllProvinces()
-    .then((provinces) => {
-      console.log(`\n🎉 Province seeding completed! ${provinces.length} provinces added.`);
-      process.exit(0);
-    })
-    .catch((error) => {
-      console.error('❌ Failed to seed provinces:', error);
-      process.exit(1);
-    });
+async function main() {
+  try {
+    console.log('Starting province seeding...');
+    
+    await seedAllProvinces();
+    
+    console.log('✅ Province seeding completed successfully');
+    process.exit(0);
+  } catch (error: any) {
+    console.error('❌ Province seeding failed:', error);
+    process.exit(1);
+  }
+}
+
+// Export for programmatic use
+export { seedAllProvinces as seedProvinces };
+
+// Run if called directly
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main();
 } 

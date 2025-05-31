@@ -1,242 +1,312 @@
-import { db, pool } from './config';
+import { db } from './config';
 import * as schema from './schema';
 // import { v4 as uuidv4 } from 'uuid'; // Not strictly needed if IDs are auto-generated
-import { sql } from 'drizzle-orm';
-import type { NewProvince, NewClass, NewTag, NewGym, NewGymImage, NewTrainer, NewUser, NewTrainerClass, NewTrainerTag, NewGymTag } from '../types';
 
-export async function seedData() {
-  console.log('🌱 Starting to seed data with new ERD-aligned schema...');
+// Mock data arrays...
+const mockGyms = [
+  {
+    id: '550e8400-e29b-41d4-a716-446655440001',
+    name_th: 'สยามไทยฟิตเนส',
+    name_en: 'Siam Thai Fitness',
+    description_th: 'ศูนย์ฝึกมวยไทยและฟิตเนสครบวงจร',
+    description_en: 'Complete Muay Thai and fitness center',
+    phone: '02-123-4567',
+    email: 'info@siamthaifitness.com',
+    province_id: 1, // Bangkok
+    map_url: 'https://maps.google.com/?q=Siam+Thai+Fitness',
+    youtube_url: 'https://youtube.com/siamthaifitness',
+    line_id: '@siamthaifitness',
+    is_active: true,
+  },
+  {
+    id: '550e8400-e29b-41d4-a716-446655440002',
+    name_th: 'แชมป์มวยไทยจิม',
+    name_en: 'Champion Muay Thai Gym',
+    description_th: 'โรงยิมมวยไทยสำหรับนักสู้ระดับโลก',
+    description_en: 'Muay Thai gym for world-class fighters',
+    phone: '02-234-5678',
+    email: 'contact@championmuaythai.com',
+    province_id: 1, // Bangkok
+    map_url: 'https://maps.google.com/?q=Champion+Muay+Thai+Gym',
+    youtube_url: 'https://youtube.com/championmuaythai',
+    line_id: '@championmuaythai',
+    is_active: true,
+  },
+  {
+    id: '550e8400-e29b-41d4-a716-446655440003',
+    name_th: 'ราชดำเนินมวยไทย',
+    name_en: 'Ratchadamnoen Muay Thai',
+    description_th: 'โรงยิมมวยไทยแบบดั้งเดิม',
+    description_en: 'Traditional Muay Thai gym',
+    phone: '02-345-6789',
+    email: 'info@ratchadamnoenmuaythai.com',
+    province_id: 1, // Bangkok
+    map_url: 'https://maps.google.com/?q=Ratchadamnoen+Muay+Thai',
+    youtube_url: null,
+    line_id: '@ratchadamnoenmt',
+    is_active: true,
+  },
+  {
+    id: '550e8400-e29b-41d4-a716-446655440004',
+    name_th: 'เชียงใหม่มวยไทยคลับ',
+    name_en: 'Chiang Mai Muay Thai Club',
+    description_th: 'สโมสรมวยไทยในเมืองเชียงใหม่',
+    description_en: 'Muay Thai club in Chiang Mai',
+    phone: '053-123-456',
+    email: 'info@chiangmaimuaythai.com',
+    province_id: 2, // Chiang Mai
+    map_url: 'https://maps.google.com/?q=Chiang+Mai+Muay+Thai+Club',
+    youtube_url: 'https://youtube.com/chiangmaimuaythai',
+    line_id: '@chiangmaimt',
+    is_active: true,
+  },
+  {
+    id: '550e8400-e29b-41d4-a716-446655440005',
+    name_th: 'ภูเก็ตไฟท์คลับ',
+    name_en: 'Phuket Fight Club',
+    description_th: 'สโมสรมวยไทยในจังหวัดภูเก็ต',
+    description_en: 'Muay Thai club in Phuket',
+    phone: '076-123-456',
+    email: 'contact@phuketfightclub.com',
+    province_id: 3, // Phuket
+    map_url: 'https://maps.google.com/?q=Phuket+Fight+Club',
+    youtube_url: null,
+    line_id: '@phuketfightclub',
+    is_active: true,
+  },
+];
 
+const mockTrainers = [
+  {
+    id: '550e8400-e29b-41d4-a716-446655440101',
+    first_name_th: 'สมชาย',
+    first_name_en: 'Somchai',
+    last_name_th: 'เพชรดำ',
+    last_name_en: 'Phetdam',
+    bio_th: 'อาจารย์มวยไทยที่มีประสบการณ์มากกว่า 20 ปี',
+    bio_en: 'Muay Thai instructor with over 20 years of experience',
+    phone: '081-234-5678',
+    email: 'somchai.phetdam@gmail.com',
+    line_id: '@somchaiphetdam',
+    is_freelance: false,
+    gym_id: '550e8400-e29b-41d4-a716-446655440001',
+    province_id: 1,
+    is_active: true,
+  },
+  {
+    id: '550e8400-e29b-41d4-a716-446655440102',
+    first_name_th: 'นภา',
+    first_name_en: 'Napa',
+    last_name_th: 'ทองคำ',
+    last_name_en: 'Thongkham',
+    bio_th: 'อดีตนักสู้หญิงมืออาชีพ ปัจจุบันเป็นครูฝึก',
+    bio_en: 'Former professional female fighter, now instructor',
+    phone: '081-345-6789',
+    email: 'napa.thongkham@gmail.com',
+    line_id: '@napathongkham',
+    is_freelance: true,
+    gym_id: null,
+    province_id: 1,
+    is_active: true,
+  },
+  {
+    id: '550e8400-e29b-41d4-a716-446655440103',
+    first_name_th: 'วิชัย',
+    first_name_en: 'Wichai',
+    last_name_th: 'สีหามาตย์',
+    last_name_en: 'Seehamat',
+    bio_th: 'แชมป์มวยไทยอดีต ผู้เชี่ยวชาญด้านเทคนิคการชก',
+    bio_en: 'Former Muay Thai champion, specialist in fighting techniques',
+    phone: '081-456-7890',
+    email: 'wichai.seehamat@gmail.com',
+    line_id: '@wichaiseehamat',
+    is_freelance: false,
+    gym_id: '550e8400-e29b-41d4-a716-446655440002',
+    province_id: 1,
+    is_active: true,
+  },
+  {
+    id: '550e8400-e29b-41d4-a716-446655440104',
+    first_name_th: 'อรุณ',
+    first_name_en: 'Arun',
+    last_name_th: 'ช้างเผือก',
+    last_name_en: 'Changphueak',
+    bio_th: 'ครูฝึกมวยไทยในเชียงใหม่ มีประสบการณ์ 15 ปี',
+    bio_en: 'Muay Thai instructor in Chiang Mai with 15 years experience',
+    phone: '081-567-8901',
+    email: 'arun.changphueak@gmail.com',
+    line_id: '@arunchangphueak',
+    is_freelance: false,
+    gym_id: '550e8400-e29b-41d4-a716-446655440004',
+    province_id: 2,
+    is_active: true,
+  },
+  {
+    id: '550e8400-e29b-41d4-a716-446655440105',
+    first_name_th: 'มานะ',
+    first_name_en: 'Mana',
+    last_name_th: 'เกาะแก้ว',
+    last_name_en: 'Kokaew',
+    bio_th: 'ครูฝึกมวยไทยในภูเก็ต เชี่ยวชาญด้านการป้องกันตัว',
+    bio_en: 'Muay Thai instructor in Phuket, specializing in self-defense',
+    phone: '081-678-9012',
+    email: 'mana.kokaew@gmail.com',
+    line_id: '@manakokaew',
+    is_freelance: false,
+    gym_id: '550e8400-e29b-41d4-a716-446655440005',
+    province_id: 3,
+    is_active: true,
+  },
+];
+
+const mockClasses = [
+  {
+    id: '650e8400-e29b-41d4-a716-446655440001',
+    name_th: 'มวยไทยเบื้องต้น',
+    name_en: 'Basic Muay Thai',
+    description_th: 'คอร์สเรียนมวยไทยสำหรับผู้เริ่มต้น',
+    description_en: 'Muay Thai course for beginners',
+  },
+  {
+    id: '650e8400-e29b-41d4-a716-446655440002',
+    name_th: 'มวยไทยระดับกลาง',
+    name_en: 'Intermediate Muay Thai',
+    description_th: 'คอร์สมวยไทยสำหรับผู้มีพื้นฐาน',
+    description_en: 'Muay Thai course for those with basic knowledge',
+  },
+  {
+    id: '650e8400-e29b-41d4-a716-446655440003',
+    name_th: 'มวยไทยขั้นสูง',
+    name_en: 'Advanced Muay Thai',
+    description_th: 'คอร์สมวยไทยสำหรับผู้เชี่ยวชาญ',
+    description_en: 'Muay Thai course for experts',
+  },
+  {
+    id: '650e8400-e29b-41d4-a716-446655440004',
+    name_th: 'การป้องกันตัว',
+    name_en: 'Self Defense',
+    description_th: 'คอร์สการป้องกันตัวด้วยมวยไทย',
+    description_en: 'Self-defense course using Muay Thai',
+  },
+  {
+    id: '650e8400-e29b-41d4-a716-446655440005',
+    name_th: 'ฟิตเนสมวยไทย',
+    name_en: 'Muay Thai Fitness',
+    description_th: 'คอร์สออกกำลังกายด้วยมวยไทย',
+    description_en: 'Fitness course using Muay Thai',
+  },
+];
+
+const mockTags = [
+  {
+    id: '750e8400-e29b-41d4-a716-446655440001',
+    name_th: 'ผู้เริ่มต้น',
+    name_en: 'Beginner',
+    description_th: 'เหมาะสำหรับผู้เริ่มต้นเรียนมวยไทย',
+    description_en: 'Suitable for Muay Thai beginners',
+  },
+  {
+    id: '750e8400-e29b-41d4-a716-446655440002',
+    name_th: 'มืออาชีพ',
+    name_en: 'Professional',
+    description_th: 'สำหรับนักสู้มืออาชีพ',
+    description_en: 'For professional fighters',
+  },
+  {
+    id: '750e8400-e29b-41d4-a716-446655440003',
+    name_th: 'ฟิตเนส',
+    name_en: 'Fitness',
+    description_th: 'เน้นการออกกำลังกายและสุขภาพ',
+    description_en: 'Focus on exercise and health',
+  },
+  {
+    id: '750e8400-e29b-41d4-a716-446655440004',
+    name_th: 'การป้องกันตัว',
+    name_en: 'Self Defense',
+    description_th: 'เน้นทักษะการป้องกันตัว',
+    description_en: 'Focus on self-defense skills',
+  },
+  {
+    id: '750e8400-e29b-41d4-a716-446655440005',
+    name_th: 'เด็ก',
+    name_en: 'Kids',
+    description_th: 'เหมาะสำหรับเด็กและเยาวชน',
+    description_en: 'Suitable for children and youth',
+  },
+];
+
+async function seedDatabase() {
   try {
-    console.log('🗑️ Clearing existing data from ERD-aligned tables...');
-    // Order of deletion matters due to foreign key constraints
-    // Start with tables that are referenced by others, or junction tables first
+    console.log('🌱 Starting database seeding...');
 
-    await db.delete(schema.trainerTags);
-    await db.delete(schema.trainerClasses);
-    await db.delete(schema.gymTags);
-    await db.delete(schema.gymImages);
-    // await db.delete(schema.gymClassTypes); // This table is removed in the new schema
-    // await db.delete(schema.gymTrainers); // This table is removed in the new schema
+    // Insert gyms (skip if already exists)
+    console.log('📍 Seeding gyms...');
+    await db.insert(schema.gyms).values(mockGyms).onConflictDoNothing();
 
-    // Then tables that are referenced
-    await db.delete(schema.trainers); // Trainers might reference gyms or provinces
-    await db.delete(schema.gyms);     // Gyms reference provinces
-    await db.delete(schema.tags);
-    await db.delete(schema.classes);  // Renamed from classTypes
-    await db.delete(schema.provinces);
-    await db.delete(schema.users); // Clearing users for a full fresh seed
+    // Insert trainers (skip if already exists)
+    console.log('🥊 Seeding trainers...');
+    await db.insert(schema.trainers).values(mockTrainers).onConflictDoNothing();
 
-    console.log('✅ Data cleared.');
+    // Insert classes (skip if already exists)
+    console.log('📚 Seeding classes...');
+    await db.insert(schema.classes).values(mockClasses).onConflictDoNothing();
 
-    // 1. Seed Provinces
-    console.log('🌍 Seeding Provinces...');
-    const provincesData: NewProvince[] = [
-      { name_th: 'กรุงเทพมหานคร', name_en: 'Bangkok' },
-      { name_th: 'เชียงใหม่', name_en: 'Chiang Mai' },
-      { name_th: 'ภูเก็ต', name_en: 'Phuket' },
-      { name_th: 'ชลบุรี', name_en: 'Chon Buri' },
-      { name_th: 'สุราษฎร์ธานี', name_en: 'Surat Thani' },
-    ];
-    const insertedProvinces = await db.insert(schema.provinces).values(provincesData).returning();
-    console.log(`✅ Seeded ${insertedProvinces.length} provinces.`);
-    const bangkok = insertedProvinces.find(p => p.name_en === 'Bangkok');
-    const chiangMai = insertedProvinces.find(p => p.name_en === 'Chiang Mai');
+    // Insert tags (skip if already exists)
+    console.log('🏷️ Seeding tags...');
+    await db.insert(schema.tags).values(mockTags).onConflictDoNothing();
 
-    if (!bangkok || !chiangMai) {
-        console.error('🚨 Could not find Bangkok or Chiang Mai after seeding provinces.');
-        await pool.end();
-        return;
-    }
+    // Insert gym-tag relationships (skip if already exists)
+    console.log('🔗 Seeding gym-tag relationships...');
+    await db.insert(schema.gymTags).values([
+      { gym_id: '550e8400-e29b-41d4-a716-446655440001', tag_id: '750e8400-e29b-41d4-a716-446655440001' },
+      { gym_id: '550e8400-e29b-41d4-a716-446655440001', tag_id: '750e8400-e29b-41d4-a716-446655440003' },
+      { gym_id: '550e8400-e29b-41d4-a716-446655440002', tag_id: '750e8400-e29b-41d4-a716-446655440002' },
+      { gym_id: '550e8400-e29b-41d4-a716-446655440003', tag_id: '750e8400-e29b-41d4-a716-446655440002' },
+      { gym_id: '550e8400-e29b-41d4-a716-446655440004', tag_id: '750e8400-e29b-41d4-a716-446655440001' },
+      { gym_id: '550e8400-e29b-41d4-a716-446655440004', tag_id: '750e8400-e29b-41d4-a716-446655440005' },
+      { gym_id: '550e8400-e29b-41d4-a716-446655440005', tag_id: '750e8400-e29b-41d4-a716-446655440004' },
+    ]).onConflictDoNothing();
 
-    // 2. Seed Users (example) - Remove hardcoded IDs, let UUID auto-generate
-    console.log('👤 Seeding Users...');
-    const usersData: NewUser[] = [
-      { email: 'admin@mymuaythai.com', role: 'admin' }, // No id field - let it auto-generate
-      { email: 'user@mymuaythai.com', role: 'user' },
-    ];
-    const insertedUsers = await db.insert(schema.users).values(usersData).returning();
-    console.log(`✅ Seeded ${insertedUsers.length} users.`);
-    // const adminUser = insertedUsers.find(u => u.email === 'admin@mymuaythai.com');
+    // Insert trainer-class relationships (skip if already exists)
+    console.log('👨‍🏫 Seeding trainer-class relationships...');
+    await db.insert(schema.trainerClasses).values([
+      { trainer_id: '550e8400-e29b-41d4-a716-446655440101', class_id: '650e8400-e29b-41d4-a716-446655440001' },
+      { trainer_id: '550e8400-e29b-41d4-a716-446655440101', class_id: '650e8400-e29b-41d4-a716-446655440002' },
+      { trainer_id: '550e8400-e29b-41d4-a716-446655440102', class_id: '650e8400-e29b-41d4-a716-446655440004' },
+      { trainer_id: '550e8400-e29b-41d4-a716-446655440102', class_id: '650e8400-e29b-41d4-a716-446655440005' },
+      { trainer_id: '550e8400-e29b-41d4-a716-446655440103', class_id: '650e8400-e29b-41d4-a716-446655440002' },
+      { trainer_id: '550e8400-e29b-41d4-a716-446655440103', class_id: '650e8400-e29b-41d4-a716-446655440003' },
+      { trainer_id: '550e8400-e29b-41d4-a716-446655440104', class_id: '650e8400-e29b-41d4-a716-446655440001' },
+      { trainer_id: '550e8400-e29b-41d4-a716-446655440104', class_id: '650e8400-e29b-41d4-a716-446655440005' },
+      { trainer_id: '550e8400-e29b-41d4-a716-446655440105', class_id: '650e8400-e29b-41d4-a716-446655440004' },
+    ]).onConflictDoNothing();
 
-    // 3. Seed Classes (formerly ClassTypes) - Remove hardcoded IDs
-    console.log('🥊 Seeding Classes...');
-    const classesData: NewClass[] = [
-      { name_th: 'มวยไทยพื้นฐาน', name_en: 'Basic Muay Thai', description_th: 'เรียนรู้พื้นฐานมวยไทย', description_en: 'Learn the basics of Muay Thai' },
-      { name_th: 'มวยไทยขั้นสูง', name_en: 'Advanced Muay Thai', description_th: 'สำหรับผู้มีประสบการณ์', description_en: 'For experienced practitioners' },
-      { name_th: 'มวยไทยสำหรับเด็ก', name_en: 'Muay Thai for Kids', description_th: 'สอนมวยไทยให้เด็กๆ', description_en: 'Muay Thai classes for children' },
-      { name_th: 'คาร์ดิโอ มวยไทย', name_en: 'Cardio Muay Thai', description_th: 'มวยไทยเพื่อการออกกำลังกาย', description_en: 'Muay Thai for fitness' },
-    ];
-    const insertedClasses = await db.insert(schema.classes).values(classesData).returning();
-    console.log(`✅ Seeded ${insertedClasses.length} classes.`);
-    const basicMuayThai = insertedClasses.find(c => c.name_en === 'Basic Muay Thai');
-    const advancedMuayThai = insertedClasses.find(c => c.name_en === 'Advanced Muay Thai');
-
-    if (!basicMuayThai || !advancedMuayThai) {
-        console.error('🚨 Could not find basic or advanced Muay Thai class after seeding.');
-        await pool.end();
-        return;
-    }
-
-    // 4. Seed Tags
-    console.log('🏷️ Seeding Tags...');
-    const tagsData: NewTag[] = [
-      { name_th: 'เหมาะสำหรับผู้เริ่มต้น', name_en: 'Beginner Friendly' },
-      { name_th: 'สำหรับมือโปร', name_en: 'For Professionals' },
-      { name_th: 'บรรยากาศดี', name_en: 'Good Atmosphere' },
-      { name_th: 'อุปกรณ์ครบครัน', name_en: 'Fully Equipped' },
-      { name_th: 'สอนภาษาอังกฤษ', name_en: 'English Speaking' },
-    ];
-    const insertedTags = await db.insert(schema.tags).values(tagsData).returning();
-    console.log(`✅ Seeded ${insertedTags.length} tags.`);
-    const beginnerTag = insertedTags.find(t => t.name_en === 'Beginner Friendly');
-    const englishSpeakingTag = insertedTags.find(t => t.name_en === 'English Speaking');
-
-    if (!beginnerTag || !englishSpeakingTag) {
-        console.error('🚨 Could not find beginner or english speaking tag after seeding.');
-        await pool.end();
-        return;
-    }
-
-
-    // 5. Seed Gyms
-    console.log('️🏋️ Seeding Gyms...');
-    const gymsData: NewGym[] = [
-      {
-        name_th: 'ยอดมวยยิม กรุงเทพ',
-        name_en: 'Yodmuay Gym Bangkok',
-        description_th: 'ยิมมวยไทยบรรยากาศดี สอนโดยครูมวยประสบการณ์สูง ใจกลางกรุงเทพ',
-        description_en: 'Authentic Muay Thai gym with experienced trainers in central Bangkok.',
-        phone: '0812345678',
-        email: 'info@yodmuaygym-bkk.com',
-        province_id: bangkok.id,
-        map_url: 'https://maps.app.goo.gl/yodmuaybkk',
-        youtube_url: 'https://youtube.com/yodmuaybkk',
-        line_id: '@yodmuaybkk',
-        // created_at will default
-        // is_active will default to true
-      },
-      {
-        name_th: 'ลานนามวยไทย เชียงใหม่',
-        name_en: 'Lanna Muay Thai Chiang Mai',
-        description_th: 'เรียนมวยไทยท่ามกลางธรรมชาติที่เชียงใหม่ สงบและเข้มข้น',
-        description_en: 'Learn Muay Thai in the beautiful surroundings of Chiang Mai. Serene and intense.',
-        phone: '0987654321',
-        email: 'info@lannamuaythai-cm.com',
-        province_id: chiangMai.id,
-        map_url: 'https://maps.app.goo.gl/lannacm',
-        line_id: '@lannacm',
-      },
-    ];
-    const insertedGyms = await db.insert(schema.gyms).values(gymsData).returning();
-    console.log(`✅ Seeded ${insertedGyms.length} gyms.`);
-    const yodmuayGym = insertedGyms.find(g => g.name_en === 'Yodmuay Gym Bangkok');
-    const lannaGym = insertedGyms.find(g => g.name_en === 'Lanna Muay Thai Chiang Mai');
-
-    if (!yodmuayGym || !lannaGym) {
-        console.error('🚨 Could not find Yodmuay Gym or Lanna Gym after seeding.');
-        await pool.end();
-        return;
-    }
-    
-    // 6. Seed Gym Images
-    console.log('📸 Seeding Gym Images...');
-    const gymImagesData: NewGymImage[] = [
-        { gym_id: yodmuayGym.id, image_url: 'https://picsum.photos/seed/yodmuaybkk1/800/600' },
-        { gym_id: yodmuayGym.id, image_url: 'https://picsum.photos/seed/yodmuaybkk2/800/600' },
-        { gym_id: lannaGym.id, image_url: 'https://picsum.photos/seed/lannacm1/800/600' },
-    ];
-    const insertedGymImages = await db.insert(schema.gymImages).values(gymImagesData).returning();
-    console.log(`✅ Seeded ${insertedGymImages.length} gym images.`);
-
-    // 7. Seed Trainers
-    console.log('🏆 Seeding Trainers...');
-    const trainersData: NewTrainer[] = [
-      {
-        first_name_th: 'ยอด', last_name_th: 'ศึกษาสงวน',
-        first_name_en: 'Yod', last_name_en: 'Suksasuan',
-        bio_th: 'อดีตแชมป์หลายสมัย ประสบการณ์สอนกว่า 20 ปี เน้นเทคนิคและพละกำลัง',
-        bio_en: 'Former champion with over 20 years of teaching experience. Focus on technique and power.',
-        phone: '0811112222',
-        email: 'yod.s@example.com',
-        line_id: 'kruyodmuaythai',
-        is_freelance: false,
-        gym_id: yodmuayGym.id, // Affiliated with Yodmuay Gym
-        province_id: bangkok.id, // Based in Bangkok
-        // profile_image_url: 'https://picsum.photos/seed/kruyod/300/300' // profile_image_url not in ERD for trainers
-      },
-      {
-        first_name_th: 'แก้ว', last_name_th: 'ใจดี',
-        first_name_en: 'Kaew', last_name_en: 'Jaidee',
-        bio_th: 'เชี่ยวชาญมวยไทยโบราณและเทคนิคการป้องกันตัว สอนสนุกเป็นกันเอง',
-        bio_en: 'Specializes in ancient Muay Thai and self-defense techniques. Fun and friendly teaching style.',
-        phone: '0822223333',
-        email: 'kaew.j@example.com',
-        is_freelance: true, // Freelance trainer
-        province_id: chiangMai.id, // Based in Chiang Mai, but freelance
-        // gym_id is null for freelance
-      },
-    ];
-    const insertedTrainers = await db.insert(schema.trainers).values(trainersData).returning();
-    console.log(`✅ Seeded ${insertedTrainers.length} trainers.`);
-    const kruYod = insertedTrainers.find(t => t.email === 'yod.s@example.com');
-    const kruKaew = insertedTrainers.find(t => t.email === 'kaew.j@example.com');
-
-    if (!kruYod || !kruKaew) {
-        console.error('🚨 Could not find Kru Yod or Kru Kaew after seeding.');
-        await pool.end();
-        return;
-    }
-
-    // 8. Link Gyms with Tags (GymTags)
-    console.log('🔗 Linking Gyms with Tags...');
-    const gymTagsData: NewGymTag[] = [
-        { gym_id: yodmuayGym.id, tag_id: beginnerTag.id },
-        { gym_id: yodmuayGym.id, tag_id: englishSpeakingTag.id },
-        { gym_id: lannaGym.id, tag_id: beginnerTag.id },
-    ];
-    await db.insert(schema.gymTags).values(gymTagsData);
-    console.log(`✅ Linked ${gymTagsData.length} gym-tag relationships.`);
-
-    // 9. Link Trainers with Classes (TrainerClasses)
-    console.log('🔗 Linking Trainers with Classes...');
-    const trainerClassesData: NewTrainerClass[] = [
-        { trainer_id: kruYod.id, class_id: basicMuayThai.id },
-        { trainer_id: kruYod.id, class_id: advancedMuayThai.id },
-        { trainer_id: kruKaew.id, class_id: basicMuayThai.id }, // Kru Kaew also teaches basic
-    ];
-    await db.insert(schema.trainerClasses).values(trainerClassesData);
-    console.log(`✅ Linked ${trainerClassesData.length} trainer-class relationships.`);
-
-    // 10. Link Trainers with Tags (TrainerTags) - Example: Specializations
-    console.log('🔗 Linking Trainers with Tags...');
-    const professionalTag = insertedTags.find(t => t.name_en === 'For Professionals');
-    if(professionalTag) {
-        const trainerTagsData: NewTrainerTag[] = [
-            { trainer_id: kruYod.id, tag_id: professionalTag.id }, // Kru Yod is for pros
-            { trainer_id: kruKaew.id, tag_id: beginnerTag.id },    // Kru Kaew is beginner friendly
-        ];
-        await db.insert(schema.trainerTags).values(trainerTagsData);
-        console.log(`✅ Linked ${trainerTagsData.length} trainer-tag relationships.`);
-    }
-    
-    console.log('🎉 Seed data completed successfully!');
-  } catch (error) {
-    console.error('❌ Error seeding data:', error);
-    // Ensure pool is closed even on error, but after logging
-    await pool.end();
-    console.log('Database pool closed after error in seeding.');
-    process.exit(1); // Exit with error code
-  } finally {
-    // This block might be redundant if errors are handled and exit, 
-    // but good for ensuring pool closure if no explicit exit occurs in catch.
-    if (pool && !(pool as any)._ended) { // Check if pool exists and not already ended
-        await pool.end();
-        console.log('Database pool closed after seeding operation completed.');
-    }
+    console.log('✅ Database seeding completed successfully!');
+    return true;
+  } catch (error: any) {
+    console.error('❌ Database seeding failed:', error);
+    throw error;
   }
 }
 
-if (require.main === module) {
-  seedData();
+async function main() {
+  try {
+    console.log('Starting database seeding...');
+    
+    await seedDatabase();
+    
+    console.log('✅ Database seeding completed successfully');
+    process.exit(0);
+  } catch (error: any) {
+    console.error('❌ Database seeding failed:', error);
+    process.exit(1);
+  }
+}
+
+// Export for programmatic use
+export { seedDatabase };
+
+// Run if called directly
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main();
 } 

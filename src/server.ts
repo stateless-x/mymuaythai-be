@@ -1,70 +1,125 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
+import rateLimit from '@fastify/rate-limit';
+import compress from '@fastify/compress';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import { gymRoutes } from './routes/gyms';
 import { trainerRoutes } from './routes/trainers';
 import { provinceRoutes } from './routes/provinces';
 import { tagRoutes } from './routes/tags';
+import { healthRoutes } from './routes/health';
 import { checkDatabaseConnection } from './db/config';
+import { 
+  env, 
+  serverConfig, 
+  corsConfig, 
+  rateLimitConfig, 
+  logConfig, 
+  swaggerConfig 
+} from './config/environment';
 
-// Create Fastify instance
+// Create Fastify instance with better logging
 const fastify = Fastify({
-  logger: {
-    level: 'info',
-    transport: {
-      target: 'pino-pretty'
-    }
-  }
+  logger: env.NODE_ENV === 'production' 
+    ? { level: 'info' }
+    : {
+        level: 'debug',
+        transport: {
+          target: 'pino-pretty',
+          options: {
+            colorize: true,
+            translateTime: 'HH:MM:ss Z',
+            ignore: 'pid,hostname',
+          },
+        },
+      },
+  trustProxy: serverConfig.trustProxy,
 });
 
-// Register plugins
+// Register security plugins
 fastify.register(helmet, {
-  contentSecurityPolicy: false
+  contentSecurityPolicy: false,
 });
 
-fastify.register(cors, {
-  origin: true,
-  credentials: true
+// Rate limiting
+fastify.register(rateLimit, {
+  max: rateLimitConfig.max,
+  timeWindow: rateLimitConfig.timeWindow,
+  errorResponseBuilder: function (request, context) {
+    return {
+      success: false,
+      error: 'Rate limit exceeded',
+      statusCode: 429,
+      retryAfter: context.ttl,
+    };
+  },
 });
+
+// Compression
+fastify.register(compress, { 
+  global: true,
+  encodings: ['gzip', 'deflate'],
+});
+
+fastify.register(cors, corsConfig);
 
 // Swagger documentation
 fastify.register(swagger, {
   openapi: {
     openapi: '3.0.0',
     info: {
-      title: process.env.API_TITLE || 'MyMuayThai API',
-      description: process.env.API_DESCRIPTION || 'API for managing Muay Thai gyms and trainers',
-      version: process.env.API_VERSION || '1.0.0'
+      title: env.API_TITLE,
+      description: env.API_DESCRIPTION,
+      version: env.API_VERSION,
+      contact: {
+        name: 'MyMuayThai Team',
+        email: 'api@mymuaythai.com',
+      },
     },
     servers: [
       {
-        url: `http://${process.env.HOST || '0.0.0.0'}:${process.env.PORT || '4000'}`,
-        description: 'Development server'
-      }
+        url: `http://${env.HOST}:${env.PORT}`,
+        description: env.NODE_ENV === 'development' ? 'Development server' : 'Production server',
+      },
     ],
-  }
+    components: {
+      securitySchemes: {
+        apiKey: {
+          type: 'apiKey' as const,
+          name: 'X-API-Key',
+          in: 'header' as const,
+        },
+      },
+    },
+  },
 });
 
 fastify.register(swaggerUi, {
   routePrefix: '/docs',
   uiConfig: {
-    docExpansion: 'full',
-    deepLinking: false
-  }
+    docExpansion: 'list',
+    deepLinking: false,
+  },
+  staticCSP: true,
+  transformStaticCSP: (header) => header,
 });
 
-// Health check endpoint
+// Health check endpoints (no rate limiting)
+fastify.register(healthRoutes);
+
+// Basic health endpoint for load balancers
 fastify.get('/health', async (request, reply) => {
   return { 
     status: 'ok', 
     timestamp: new Date().toISOString(),
-    service: 'MyMuayThai Backend API'
+    service: env.API_TITLE,
+    version: env.API_VERSION,
   };
 });
 
-// API routes
+// API routes with rate limiting
 fastify.register(async (fastify) => {
   await fastify.register(gymRoutes, { prefix: '/api' });
   await fastify.register(trainerRoutes, { prefix: '/api' });
@@ -72,26 +127,79 @@ fastify.register(async (fastify) => {
   await fastify.register(tagRoutes, { prefix: '/api' });
 });
 
-// Error handler
-fastify.setErrorHandler((error, request, reply) => {
-  const statusCode = error.statusCode || 500;
-  fastify.log.error(error);
-  
-  reply.status(statusCode).send({
+// Register error handler
+fastify.setErrorHandler(async (error, request, reply) => {
+  const timestamp = new Date().toISOString();
+  const path = request.url;
+
+  // Log error for monitoring
+  request.log.error({
+    error: {
+      message: error.message,
+      stack: error.stack,
+      name: error.name,
+    },
+    request: {
+      method: request.method,
+      url: request.url,
+      ip: request.ip,
+    },
+  }, 'Request error occurred');
+
+  let statusCode = error.statusCode || 500;
+  let errorMessage = error.message || 'Internal Server Error';
+
+  // Handle specific error cases
+  if (error.code === 'FST_ERR_VALIDATION') {
+    statusCode = 400;
+    errorMessage = 'Request validation failed';
+  } else if (error.code === 'FST_ERR_NOT_FOUND') {
+    statusCode = 404;
+    errorMessage = 'Route not found';
+  }
+
+  const errorResponse = {
     success: false,
-    error: error.message || 'Internal Server Error',
-    statusCode
-  });
+    error: errorMessage,
+    statusCode,
+    timestamp,
+    path,
+  };
+
+  // Don't expose internal errors in production
+  if (env.NODE_ENV === 'production' && statusCode === 500) {
+    errorResponse.error = 'Internal Server Error';
+  }
+
+  await reply.status(statusCode).send(errorResponse);
 });
 
 // Not found handler
-fastify.setNotFoundHandler((request, reply) => {
-  reply.status(404).send({
+fastify.setNotFoundHandler(async (request, reply) => {
+  const response = {
     success: false,
     error: 'Route not found',
-    statusCode: 404
-  });
+    statusCode: 404,
+    timestamp: new Date().toISOString(),
+    path: request.url,
+  };
+  
+  return reply.status(404).send(response);
 });
+
+// Graceful shutdown handler
+const gracefulShutdown = async (signal: string) => {
+  fastify.log.info(`Received ${signal}, shutting down gracefully...`);
+  
+  try {
+    await fastify.close();
+    fastify.log.info('✅ Server closed successfully');
+    process.exit(0);
+  } catch (err) {
+    fastify.log.error('❌ Error during shutdown:', err);
+    process.exit(1);
+  }
+};
 
 // Start server
 const start = async (): Promise<void> => {
@@ -100,31 +208,31 @@ const start = async (): Promise<void> => {
     await checkDatabaseConnection();
 
     // Start the server
-    const port = parseInt(process.env.PORT || '4000');
-    const host = process.env.HOST || '0.0.0.0';
-    
-    await fastify.listen({ port, host });
-    console.log(`🚀 Server is running on http://${host}:${port}`);
-    console.log(`📚 API documentation available at http://${host}:${port}/docs`);
+    await fastify.listen(serverConfig);
+    fastify.log.info(`🚀 Server is running on http://${serverConfig.host}:${serverConfig.port}`);
+    fastify.log.info(`📚 API documentation available at http://${serverConfig.host}:${serverConfig.port}/docs`);
+    fastify.log.info(`🏥 Health checks available at http://${serverConfig.host}:${serverConfig.port}/health`);
+    fastify.log.info(`🌍 Environment: ${env.NODE_ENV}`);
   } catch (err) {
-    fastify.log.error(err);
+    fastify.log.error('❌ Failed to start server:', err);
     process.exit(1);
   }
 };
 
 // Handle process termination
-['SIGINT', 'SIGTERM'].forEach((signal) => {
-  process.on(signal, async () => {
-    try {
-      console.log(`\n🛑 Received ${signal}, shutting down gracefully...`);
-      await fastify.close();
-      console.log('✅ Server closed successfully');
-      process.exit(0);
-    } catch (err) {
-      console.error('❌ Error during shutdown:', err);
-      process.exit(1);
-    }
-  });
+['SIGINT', 'SIGTERM', 'SIGUSR2'].forEach((signal) => {
+  process.on(signal, () => gracefulShutdown(signal));
+});
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (error) => {
+  fastify.log.fatal('Uncaught Exception:', error);
+  gracefulShutdown('uncaughtException');
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  fastify.log.fatal('Unhandled Rejection at:', promise, 'reason:', reason);
+  gracefulShutdown('unhandledRejection');
 });
 
 // Start the server

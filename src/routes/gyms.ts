@@ -1,283 +1,268 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { GymService } from '../services/gymService';
-import { CreateGymRequest, ApiResponse, PaginatedResponse, GymWithDetails } from '../types';
+import { createGymSchema, updateGymSchema, gymQuerySchema, formatZodError } from '../utils/validation';
+import { ValidationError, NotFoundError } from '../utils/database';
+import { UpdateGymRequest } from '../types';
+import { z } from 'zod';
+
+interface ApiResponse<T> {
+  success: boolean;
+  data?: T;
+  message?: string;
+  error?: string;
+  pagination?: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+  };
+}
 
 const gymService = new GymService();
 
 export async function gymRoutes(fastify: FastifyInstance) {
-  // Get all gyms with pagination
-  fastify.get('/gyms', async (request: FastifyRequest<{
-    Querystring: { 
-      page?: string;
-      pageSize?: string;
-      search?: string;
-      provinceId?: string;
-    }
-  }>, reply: FastifyReply) => {
+  // Get all gyms with pagination and filtering
+  fastify.get('/gyms', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const page = parseInt(request.query.page || '1');
-      const pageSize = parseInt(request.query.pageSize || '20');
-      const searchTerm = request.query.search;
-      const provinceId = request.query.provinceId ? parseInt(request.query.provinceId) : undefined;
-
-      const { gyms, total } = await gymService.getAllGyms(page, pageSize, searchTerm, provinceId);
-      const totalPages = Math.ceil(total / pageSize);
+      // Validate query parameters
+      const { page, pageSize, search, provinceId } = gymQuerySchema.parse(request.query);
       
-      const response: ApiResponse<PaginatedResponse<GymWithDetails>> = {
+      const result = await gymService.getAllGyms(page, pageSize, search, provinceId);
+      
+      const response: ApiResponse<typeof result.gyms> = {
         success: true,
-        data: {
-          items: gyms,
-          total,
+        data: result.gyms,
+        pagination: {
           page,
           pageSize,
-          totalPages
+          total: result.total,
+          totalPages: Math.ceil(result.total / pageSize),
         },
-        message: 'Gyms retrieved successfully'
       };
+      
       return reply.code(200).send(response);
     } catch (error) {
-      const response: ApiResponse<null> = {
-        success: false,
-        error: 'Failed to retrieve gyms'
-      };
-      return reply.code(500).send(response);
+      if (error instanceof z.ZodError) {
+        throw new ValidationError(`Query validation failed: ${formatZodError(error)}`);
+      }
+      throw error;
     }
   });
 
   // Get gym by ID
   fastify.get('/gyms/:id', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-    try {
-      const { id } = request.params;
-      const gym = await gymService.getGymById(id);
-      
-      if (!gym) {
-        const response: ApiResponse<null> = {
-          success: false,
-          error: 'Gym not found'
-        };
-        return reply.code(404).send(response);
-      }
-
-      const response: ApiResponse<typeof gym> = {
-        success: true,
-        data: gym,
-        message: 'Gym retrieved successfully'
-      };
-      return reply.code(200).send(response);
-    } catch (error) {
-      const response: ApiResponse<null> = {
-        success: false,
-        error: 'Failed to retrieve gym'
-      };
-      return reply.code(500).send(response);
+    const { id } = request.params;
+    
+    if (!id) {
+      throw new ValidationError('Gym ID is required');
     }
+    
+    const gym = await gymService.getGymById(id);
+    
+    if (!gym) {
+      throw new NotFoundError('Gym', id);
+    }
+
+    const response: ApiResponse<typeof gym> = {
+      success: true,
+      data: gym,
+    };
+    
+    return reply.code(200).send(response);
   });
 
   // Get gym images
   fastify.get('/gyms/:id/images', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-    try {
-      const { id } = request.params;
-      const images = await gymService.getGymImages(id);
-      
-      const response: ApiResponse<typeof images> = {
-        success: true,
-        data: images,
-        message: 'Gym images retrieved successfully'
-      };
-      return reply.code(200).send(response);
-    } catch (error) {
-      const response: ApiResponse<null> = {
-        success: false,
-        error: 'Failed to retrieve gym images'
-      };
-      return reply.code(500).send(response);
-    }
+    const { id } = request.params;
+    const images = await gymService.getGymImages(id);
+    
+    const response: ApiResponse<typeof images> = {
+      success: true,
+      data: images,
+    };
+    return reply.code(200).send(response);
   });
 
   // Get gyms by province
-  fastify.get('/gyms/province/:provinceId', async (request: FastifyRequest<{ Params: { provinceId: string } }>, reply: FastifyReply) => {
-    try {
-      const { provinceId } = request.params;
-      const gyms = await gymService.getGymsByProvince(parseInt(provinceId));
-      
-      const response: ApiResponse<typeof gyms> = {
-        success: true,
-        data: gyms,
-        message: 'Gyms retrieved successfully'
-      };
-      return reply.code(200).send(response);
-    } catch (error) {
-      const response: ApiResponse<null> = {
-        success: false,
-        error: 'Failed to retrieve gyms by province'
-      };
-      return reply.code(500).send(response);
+  fastify.get('/provinces/:provinceId/gyms', async (request: FastifyRequest<{ Params: { provinceId: string } }>, reply: FastifyReply) => {
+    const provinceId = parseInt(request.params.provinceId);
+    
+    if (isNaN(provinceId) || provinceId < 1) {
+      throw new ValidationError('Valid province ID is required');
     }
+    
+    const gyms = await gymService.getGymsByProvince(provinceId);
+    
+    const response: ApiResponse<typeof gyms> = {
+      success: true,
+      data: gyms,
+    };
+    
+    return reply.code(200).send(response);
   });
 
   // Search gyms
-  fastify.get('/gyms/search/:query', async (request: FastifyRequest<{ 
-    Params: { query: string };
-    Querystring: { 
-      page?: string;
-      pageSize?: string;
-    }
-  }>, reply: FastifyReply) => {
+  fastify.get('/gyms/search', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const { query } = request.params;
-      const page = parseInt(request.query.page || '1');
-      const pageSize = parseInt(request.query.pageSize || '20');
+      const { page, pageSize, search } = gymQuerySchema.parse(request.query);
       
-      const { gyms, total } = await gymService.searchGyms(query, page, pageSize);
-      const totalPages = Math.ceil(total / pageSize);
+      if (!search) {
+        throw new ValidationError('Search term is required');
+      }
       
-      const response: ApiResponse<PaginatedResponse<GymWithDetails>> = {
+      const result = await gymService.searchGyms(search, page, pageSize);
+      
+      const response: ApiResponse<typeof result.gyms> = {
         success: true,
-        data: {
-          items: gyms,
-          total,
+        data: result.gyms,
+        pagination: {
           page,
           pageSize,
-          totalPages
+          total: result.total,
+          totalPages: Math.ceil(result.total / pageSize),
         },
-        message: 'Search results retrieved successfully'
       };
+      
       return reply.code(200).send(response);
     } catch (error) {
-      const response: ApiResponse<null> = {
-        success: false,
-        error: 'Failed to search gyms'
-      };
-      return reply.code(500).send(response);
+      if (error instanceof z.ZodError) {
+        throw new ValidationError(`Query validation failed: ${formatZodError(error)}`);
+      }
+      throw error;
     }
   });
 
   // Create new gym
-  fastify.post('/gyms', async (request: FastifyRequest<{ Body: CreateGymRequest }>, reply: FastifyReply) => {
+  fastify.post('/gyms', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const gymData = request.body;
+      // Validate request body
+      const gymData = createGymSchema.parse(request.body);
+      
       const gym = await gymService.createGym(gymData);
       
       const response: ApiResponse<typeof gym> = {
         success: true,
         data: gym,
-        message: 'Gym created successfully'
+        message: 'Gym created successfully',
       };
+      
       return reply.code(201).send(response);
     } catch (error) {
-      const response: ApiResponse<null> = {
-        success: false,
-        error: 'Failed to create gym'
-      };
-      return reply.code(500).send(response);
+      if (error instanceof z.ZodError) {
+        throw new ValidationError(`Validation failed: ${formatZodError(error)}`);
+      }
+      throw error;
     }
   });
 
   // Update gym
-  fastify.put('/gyms/:id', async (request: FastifyRequest<{ Params: { id: string }; Body: Partial<CreateGymRequest> }>, reply: FastifyReply) => {
+  fastify.put('/gyms/:id', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     try {
       const { id } = request.params;
-      const gymData = request.body;
-      const gym = await gymService.updateGym(id, gymData);
+      
+      if (!id) {
+        throw new ValidationError('Gym ID is required');
+      }
+      
+      // Validate request body
+      const gymData = updateGymSchema.parse(request.body);
+      
+      const gym = await gymService.updateGym(id, gymData as UpdateGymRequest);
       
       if (!gym) {
-        const response: ApiResponse<null> = {
-          success: false,
-          error: 'Gym not found'
-        };
-        return reply.code(404).send(response);
+        throw new NotFoundError('Gym', id);
       }
 
       const response: ApiResponse<typeof gym> = {
         success: true,
         data: gym,
-        message: 'Gym updated successfully'
+        message: 'Gym updated successfully',
       };
+      
       return reply.code(200).send(response);
     } catch (error) {
-      const response: ApiResponse<null> = {
-        success: false,
-        error: 'Failed to update gym'
-      };
-      return reply.code(500).send(response);
+      if (error instanceof z.ZodError) {
+        throw new ValidationError(`Validation failed: ${formatZodError(error)}`);
+      }
+      throw error;
     }
   });
 
   // Delete gym (soft delete)
   fastify.delete('/gyms/:id', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-    try {
-      const { id } = request.params;
-      const deleted = await gymService.deleteGym(id);
-      
-      if (!deleted) {
-        const response: ApiResponse<null> = {
-          success: false,
-          error: 'Gym not found'
-        };
-        return reply.code(404).send(response);
-      }
-
-      const response: ApiResponse<null> = {
-        success: true,
-        message: 'Gym deleted successfully'
-      };
-      return reply.code(200).send(response);
-    } catch (error) {
-      const response: ApiResponse<null> = {
-        success: false,
-        error: 'Failed to delete gym'
-      };
-      return reply.code(500).send(response);
+    const { id } = request.params;
+    
+    if (!id) {
+      throw new ValidationError('Gym ID is required');
     }
+    
+    const deleted = await gymService.deleteGym(id);
+    
+    if (!deleted) {
+      throw new NotFoundError('Gym', id);
+    }
+
+    const response: ApiResponse<null> = {
+      success: true,
+      message: 'Gym deleted successfully',
+    };
+    
+    return reply.code(200).send(response);
   });
 
   // Add gym image
-  fastify.post('/gyms/:id/images', async (request: FastifyRequest<{ Params: { id: string }; Body: { image_url: string } }>, reply: FastifyReply) => {
-    try {
-      const { id } = request.params;
-      const { image_url } = request.body;
-      const image = await gymService.addGymImage(id, image_url);
-      
-      const response: ApiResponse<typeof image> = {
-        success: true,
-        data: image,
-        message: 'Gym image added successfully'
-      };
-      return reply.code(201).send(response);
-    } catch (error) {
-      const response: ApiResponse<null> = {
-        success: false,
-        error: 'Failed to add gym image'
-      };
-      return reply.code(500).send(response);
+  fastify.post('/gyms/:id/images', async (request: FastifyRequest<{ 
+    Params: { id: string }, 
+    Body: { image_url: string } 
+  }>, reply: FastifyReply) => {
+    const { id } = request.params;
+    const { image_url } = request.body;
+    
+    if (!id) {
+      throw new ValidationError('Gym ID is required');
     }
+    
+    if (!image_url || typeof image_url !== 'string') {
+      throw new ValidationError('Valid image URL is required');
+    }
+    
+    // Validate URL format
+    try {
+      new globalThis.URL(image_url);
+    } catch {
+      throw new ValidationError('Invalid image URL format');
+    }
+    
+    const image = await gymService.addGymImage(id, image_url);
+    
+    const response: ApiResponse<typeof image> = {
+      success: true,
+      data: image,
+      message: 'Image added successfully',
+    };
+    
+    return reply.code(201).send(response);
   });
 
   // Remove gym image
   fastify.delete('/gyms/images/:imageId', async (request: FastifyRequest<{ Params: { imageId: string } }>, reply: FastifyReply) => {
-    try {
-      const { imageId } = request.params;
-      const deleted = await gymService.removeGymImage(imageId);
-      
-      if (!deleted) {
-        const response: ApiResponse<null> = {
-          success: false,
-          error: 'Image not found'
-        };
-        return reply.code(404).send(response);
-      }
-
-      const response: ApiResponse<null> = {
-        success: true,
-        message: 'Gym image removed successfully'
-      };
-      return reply.code(200).send(response);
-    } catch (error) {
-      const response: ApiResponse<null> = {
-        success: false,
-        error: 'Failed to remove gym image'
-      };
-      return reply.code(500).send(response);
+    const { imageId } = request.params;
+    
+    if (!imageId) {
+      throw new ValidationError('Image ID is required');
     }
+    
+    const deleted = await gymService.removeGymImage(imageId);
+    
+    if (!deleted) {
+      throw new NotFoundError('Image', imageId);
+    }
+
+    const response: ApiResponse<null> = {
+      success: true,
+      message: 'Image removed successfully',
+    };
+    
+    return reply.code(200).send(response);
   });
 } 

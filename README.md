@@ -425,4 +425,115 @@ If you encounter any issues or have questions:
 1. Check the [API documentation](http://localhost:3000/docs) when server is running
 2. Review the [Code Manual](documents/code-manual.md) for detailed architecture information
 3. Create an issue in the repository with detailed information about the problem
-4. For development questions, refer to the comprehensive type definitions and inline comments 
+4. For development questions, refer to the comprehensive type definitions and inline comments
+
+## Database Seeding 🌱
+
+The project includes comprehensive database seeding automation to quickly set up development and production data.
+
+### Available Seeding Scripts
+
+| Script | Description | Use Case |
+|--------|-------------|----------|
+| `bun run db:seed:provinces` | Seeds all 76 Thai provinces | Required foundation data |
+| `bun run db:seed:dev` | Seeds essential development data | Quick development setup |
+| `bun run db:seed` | Seeds comprehensive sample data | Full demo/testing data |
+| `bun run db:fresh` | Reset + provinces + dev data | Fresh development environment |
+| `bun run db:fresh:full` | Reset + provinces + full sample data | Complete reset with all data |
+| `bun run setup:dev` | Migrate + provinces + dev data | First-time development setup |
+
+### Quick Start Options
+
+**For Development (Recommended):**
+```bash
+bun run setup:dev
+```
+This will:
+- Run database migrations
+- Seed all Thai provinces
+- Add development users, gyms, trainers, classes, and tags
+- Set up sample relationships
+
+**For Demo/Testing:**
+```bash
+bun run db:fresh:full
+```
+This will:
+- Reset the entire database
+- Run migrations
+- Seed all provinces and comprehensive sample data
+- Perfect for demonstrations or testing
+
+**For Clean Restart:**
+```bash
+bun run db:fresh
+```
+This will:
+- Reset the database
+- Set up essential development data only
+
+### What Gets Seeded
+
+#### Essential Data (`db:seed:dev`)
+- **Provinces**: 5 key provinces (Bangkok, Chiang Mai, Phuket, Chon Buri, Surat Thani)
+- **Users**: 3 development users (admin, dev, test accounts)
+- **Classes**: 4 essential Muay Thai classes
+- **Tags**: 5 useful gym/trainer tags
+- **Gyms**: 2 sample gyms (Dev Muay Thai Gym, Test Fight Club)
+- **Trainers**: 2 sample trainers (one gym-based, one freelance)
+- **Relationships**: Sample gym-tag and trainer-class associations
+
+#### Comprehensive Data (`db:seed`)
+- **All essential data above, plus:**
+- **Gyms**: 5 detailed Muay Thai gyms across different provinces
+- **Trainers**: 5 professional trainers with varied specializations
+- **Extended relationships**: Complete associations between all entities
+
+### Seed Data Features
+
+✅ **Idempotent**: Safe to run multiple times (skips existing data)  
+✅ **Conflict Resolution**: Uses `ON CONFLICT DO NOTHING` strategy  
+✅ **Realistic Data**: Thai language support with proper province associations  
+✅ **Relationship Mapping**: Proper foreign key relationships  
+✅ **Development Ready**: Includes test accounts and sample entities  
+
+### Sample Data Overview
+
+**Development Gyms:**
+- **Dev Muay Thai Gym** (Bangkok) - Development testing
+- **Test Fight Club** (Chiang Mai) - System testing
+
+**Sample Trainers:**
+- **Dev Trainer** - Gym-based trainer for development
+- **Test Instructor** - Freelance instructor for testing
+
+**Classes Available:**
+- Basic Muay Thai, Advanced Muay Thai, Kids Classes, Cardio Muay Thai
+
+**Useful Tags:**
+- Beginner Friendly, Professional, Good Atmosphere, Fully Equipped, English Speaking
+
+### Database Management
+
+```bash
+# Database operations
+bun run db:generate    # Generate migrations
+bun run db:migrate     # Run migrations
+bun run db:cleanup     # Clean all data
+bun run db:reset       # Cleanup + migrate
+bun run db:studio      # Open Drizzle Studio
+```
+
+### Environment Requirements
+
+Make sure your `.env` file includes:
+```env
+DATABASE_URL=postgresql://admin:admin@localhost:5432/mymuaythai
+DB_HOST=localhost
+DB_PORT=5432
+DB_USER=admin
+DB_PASSWORD=admin
+DB_NAME=mymuaythai
+```
+
+**Note**: All seeding scripts include proper error handling and will gracefully handle duplicate data conflicts. 
