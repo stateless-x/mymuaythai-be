@@ -14,6 +14,8 @@
     "db:migrate": "bun run src/db/migrate.ts",
     "db:seed": "bun run src/db/seed.ts",
     "db:seed:provinces": "bun run src/db/province-seed.ts",
+    "db:seed:dev": "bun run src/db/dev-seed.ts",
+    "db:cleanup": "bun run src/db/cleanup.ts",
     "db:studio": "drizzle-kit studio"
   },
   "keywords": [

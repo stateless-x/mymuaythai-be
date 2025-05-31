@@ -283,8 +283,10 @@ bun run lint         # Run ESLint
 bun run format       # Format code with Prettier
 bun run db:generate  # Generate new migrations from schema changes
 bun run db:migrate   # Apply pending migrations
-bun run db:seed      # Populate database with sample data
+bun run db:seed      # Populate database with comprehensive sample data (gyms, trainers, relationships)
 bun run db:seed:provinces  # Seed all 77 Thai provinces for production
+bun run db:seed:dev  # Seed essential data for development (provinces, users, classes, tags only)
+bun run db:cleanup   # Clean up all data from database (for production deployment)
 bun run db:studio    # Open Drizzle Studio (database GUI)
 bun test            # Run all tests
 bun test --watch    # Run tests in watch mode

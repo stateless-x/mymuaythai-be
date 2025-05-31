@@ -268,8 +268,10 @@ bun run format       # Format code with Prettier
 # Database Operations
 bun run db:generate  # Generate new migrations from schema changes
 bun run db:migrate   # Apply pending migrations to database
-bun run db:seed      # Populate database with sample data
+bun run db:seed      # Populate database with sample data (5 provinces, 2 gyms, 2 trainers, classes, tags)
 bun run db:seed:provinces  # Seed all 77 Thai provinces
+bun run db:seed:dev  # Seed essential data for development (provinces, users, classes, tags only)
+bun run db:cleanup   # Clean up all data from database (for production deployment)
 bun run db:studio    # Open Drizzle Studio (visual database browser)
 
 # Testing
