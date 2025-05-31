@@ -49,7 +49,7 @@ export class GymService {
 
   async getAllGyms(page: number = 1, pageSize: number = 10, searchTerm?: string, provinceId?: number): Promise<{ gyms: GymWithDetails[], total: number }> {
     const offset = (page - 1) * pageSize;
-    let whereConditions: (SQL<unknown> | undefined)[] = [eq(schema.gyms.is_active, true)];
+    const whereConditions: (SQL<unknown> | undefined)[] = [eq(schema.gyms.is_active, true)];
 
     if (provinceId) {
       whereConditions.push(eq(schema.gyms.province_id, provinceId));
@@ -191,8 +191,20 @@ export class GymService {
 
   async updateGym(id: string, gymData: UpdateGymRequest): Promise<Gym | null> {
     if (Object.keys(gymData).length === 0) {
-      const currentGym = await this.getGymById(id); 
-      return currentGym ? this.mapRawGymToGymWithDetails(currentGym, currentGym.province || null) as Gym : null;
+      // If no data to update, fetch and return current gym data
+      const currentGymWithDetails = await this.getGymById(id);
+      if (!currentGymWithDetails) return null;
+      
+      // Convert GymWithDetails back to basic Gym type
+      const {
+        province,
+        images,
+        tags,
+        associatedTrainers,
+        ...gymBasicData
+      } = currentGymWithDetails;
+      
+      return gymBasicData as Gym;
     }
     
     const result = await db.update(schema.gyms)

@@ -55,7 +55,7 @@ export class TrainerService {
 
   async getAllTrainers(page: number = 1, pageSize: number = 20, searchTerm?: string, provinceId?: number, gymId?: string, isFreelance?: boolean): Promise<{ trainers: TrainerWithDetails[], total: number }> {
     const offset = (page - 1) * pageSize;
-    let whereConditions: (SQL<unknown> | undefined)[] = [eq(schema.trainers.is_active, true)];
+    const whereConditions: (SQL<unknown> | undefined)[] = [eq(schema.trainers.is_active, true)];
 
     if (provinceId) {
       whereConditions.push(eq(schema.trainers.province_id, provinceId));

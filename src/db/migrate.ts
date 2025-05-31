@@ -1,8 +1,5 @@
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
-import { db, pool } from './config'; // Assuming your Drizzle instance and pool are exported from config
-import * as dotenv from 'dotenv';
-
-dotenv.config();
+import { db, pool } from './config';
 
 async function runDbMigrations() {
   console.log('Running database migrations...');

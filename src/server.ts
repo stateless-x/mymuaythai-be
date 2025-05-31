@@ -34,13 +34,13 @@ fastify.register(swagger, {
   openapi: {
     openapi: '3.0.0',
     info: {
-      title: 'MyMuayThai API',
-      description: 'API for managing Muay Thai gyms and trainers',
-      version: '1.0.0'
+      title: process.env.API_TITLE || 'MyMuayThai API',
+      description: process.env.API_DESCRIPTION || 'API for managing Muay Thai gyms and trainers',
+      version: process.env.API_VERSION || '1.0.0'
     },
     servers: [
       {
-        url: 'http://localhost:4000',
+        url: `http://${process.env.HOST || '0.0.0.0'}:${process.env.PORT || '4000'}`,
         description: 'Development server'
       }
     ],
@@ -100,7 +100,7 @@ const start = async (): Promise<void> => {
     await checkDatabaseConnection();
 
     // Start the server
-    const port = parseInt(process.env.PORT || '3000');
+    const port = parseInt(process.env.PORT || '4000');
     const host = process.env.HOST || '0.0.0.0';
     
     await fastify.listen({ port, host });
