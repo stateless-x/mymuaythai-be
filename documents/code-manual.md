@@ -104,7 +104,7 @@ This directory contains all database-related code using Drizzle ORM:
 #### **`seed.ts`** - Sample Data Population
 *   Populates the database with realistic sample data
 *   **Includes**:
-    *   5 Thai provinces (Bangkok, Chiang Mai, Phuket, etc.)
+    *   5 Thai provinces (Bangkok, Chiang Mai, Phuket, etc.) for testing
     *   2 sample users (admin and regular user)
     *   4 class types (Basic Muay Thai, Advanced, Kids, Cardio)
     *   5 categorization tags
@@ -112,6 +112,20 @@ This directory contains all database-related code using Drizzle ORM:
     *   2 trainers with their class and tag associations
 *   Handles proper deletion order for foreign key constraints
 *   Includes relationship mappings (gym-tag, trainer-class connections)
+
+#### **`province-seed.ts`** - Production Province Data
+*   Dedicated seeding script for all 77 Thai provinces
+*   **Complete Coverage**: All official provinces with accurate Thai and English names
+*   **Regional Organization**: Provinces organized by 6 geographical regions
+*   **Production Ready**: Designed for production environment use
+*   **Region Breakdown**:
+    *   Central Region: 23 provinces (IDs 1-23)
+    *   Eastern Region: 7 provinces (IDs 24-30)
+    *   Northern Region: 9 provinces (IDs 31-39)
+    *   Northeastern Region: 20 provinces (IDs 40-59)
+    *   Southern Region: 15 provinces (IDs 60-74)
+    *   Western Region: 2 provinces (IDs 75-76)
+*   **Foreign Key Compatibility**: Ensures gym creation works with valid province references
 
 ### 4.3. `src/types/` - Type Definitions
 
@@ -154,6 +168,20 @@ Contains the core business logic separated from API routing:
 *   Manages trainer-class and trainer-tag relationships
 *   Supports filtering by gym, province, or freelance status
 
+#### **`provinceService.ts`** - Province Management Logic (Read-Only)
+*   **Core Operations**:
+    *   `getAllProvinces()` - All provinces sorted by English name
+    *   `getAllProvincesThaiSort()` - All provinces sorted by Thai name
+    *   `getProvinceById()` - Single province lookup
+    *   `searchProvinces()` - Search by Thai or English name
+*   **Regional Filtering**:
+    *   `getProvincesByRegion()` - Get provinces by geographical region
+    *   Supports 6 regions: central, eastern, northern, northeastern, southern, western
+*   **Statistics**:
+    *   `getProvinceCount()` - Total province count
+    *   `getProvincesWithGymCounts()` - Province data with gym statistics
+*   **Read-Only Design**: No create, update, or delete operations for data integrity
+
 ### 4.5. `src/routes/` - API Endpoint Definitions
 
 Defines the HTTP API interface using Fastify:
@@ -178,6 +206,19 @@ Defines the HTTP API interface using Fastify:
 *   Similar REST pattern for trainer management
 *   Includes specialized endpoints for trainer-class relationships
 *   Supports filtering by various criteria (gym, province, freelance status)
+
+#### **`provinces.ts`** - Province API Endpoints (Read-Only)
+*   **GET Routes**:
+    *   `/api/provinces` - List all provinces with sorting and filtering options
+    *   `/api/provinces/:id` - Get specific province by ID
+    *   `/api/provinces/search/:query` - Search provinces by name (Thai/English)
+    *   `/api/provinces/region/:region` - Get provinces by geographical region
+    *   `/api/provinces/stats` - Get province statistics and gym counts
+*   **Query Parameters**:
+    *   `?sort=en|th` - Sort by English (default) or Thai name
+    *   `?region=central|eastern|northern|northeastern|southern|western` - Filter by region
+    *   `?stats=true` - Include gym count statistics
+*   **No CRUD Operations**: Read-only endpoints for data integrity
 
 **Response Format**: All endpoints return standardized `ApiResponse<T>` objects with:
 ```typescript
@@ -213,6 +254,7 @@ bun run format       # Format code with Prettier
 bun run db:generate  # Generate new migrations from schema changes
 bun run db:migrate   # Apply pending migrations
 bun run db:seed      # Populate database with sample data
+bun run db:seed:provinces  # Seed all 77 Thai provinces for production
 bun run db:studio    # Open Drizzle Studio (database GUI)
 ```
 

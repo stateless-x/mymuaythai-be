@@ -143,7 +143,20 @@ The platform uses a well-structured relational database with:
 - **Foreign Key Constraints**: Proper referential integrity
 - **Timestamps**: Creation tracking for auditing
 
-## 🔌 API Endpoints
+## 📄 API Endpoints
+
+### Provinces
+
+- `GET /api/provinces` - List all provinces (with sorting and region filtering)
+- `GET /api/provinces/:id` - Get specific province by ID
+- `GET /api/provinces/search/:query` - Search provinces by name (Thai/English)
+- `GET /api/provinces/region/:region` - Get provinces by region (central, eastern, northern, northeastern, southern, western)
+- `GET /api/provinces/stats` - Get province statistics and counts
+- Query parameters for `/api/provinces`:
+  - `?sort=en` - Sort by English name (default)
+  - `?sort=th` - Sort by Thai name
+  - `?region=central` - Filter by region
+  - `?stats=true` - Include gym counts per province
 
 ### Gyms
 
@@ -223,6 +236,7 @@ bun run format       # Format code with Prettier
 bun run db:generate  # Generate new migrations from schema changes
 bun run db:migrate   # Apply pending migrations to database
 bun run db:seed      # Populate database with sample data
+bun run db:seed:provinces  # Seed all 77 Thai provinces
 bun run db:studio    # Open Drizzle Studio (visual database browser)
 ```
 
@@ -235,13 +249,16 @@ src/
 │   ├── schema.ts              # Database schema definitions
 │   ├── migrate.ts             # Migration runner script
 │   ├── seed.ts                # Sample data population
+│   ├── province-seed.ts       # All 77 Thai provinces seeding
 │   └── migrations/            # Auto-generated migration files
 ├── routes/
 │   ├── gyms.ts               # Gym API endpoints
-│   └── trainers.ts           # Trainer API endpoints
+│   ├── trainers.ts           # Trainer API endpoints
+│   └── provinces.ts          # Province API endpoints (read-only)
 ├── services/
 │   ├── gymService.ts         # Gym business logic
-│   └── trainerService.ts     # Trainer business logic
+│   ├── trainerService.ts     # Trainer business logic
+│   └── provinceService.ts    # Province business logic
 ├── types/
 │   └── index.ts              # TypeScript type definitions
 └── server.ts                 # Main application entry point
@@ -274,13 +291,23 @@ env.example                   # Environment variables template
 
 The seeding script includes comprehensive sample data:
 
-- **5 Thai Provinces**: Bangkok, Chiang Mai, Phuket, Chon Buri, Surat Thani
-- **2 Users**: Admin and regular user accounts
+- **77 Thai Provinces**: All provinces of Thailand with accurate Thai and English names, organized by regions
+- **2 Users**: Admin and regular user accounts  
 - **4 Class Types**: Basic Muay Thai, Advanced, Kids classes, Cardio Muay Thai
 - **5 Tags**: Beginner Friendly, For Professionals, Good Atmosphere, Fully Equipped, English Speaking
 - **2 Gyms**: Yodmuay Gym Bangkok & Lanna Muay Thai Chiang Mai (with images and complete details)
 - **2 Trainers**: Experienced trainers with class assignments and specializations
 - **Relationships**: All many-to-many relationships properly connected
+
+### Province Data Organization
+
+The 77 provinces are organized into 6 geographical regions:
+- **Central Region**: 23 provinces (including Bangkok)
+- **Eastern Region**: 7 provinces 
+- **Northern Region**: 9 provinces
+- **Northeastern Region**: 20 provinces
+- **Southern Region**: 15 provinces  
+- **Western Region**: 2 provinces
 
 ## 🔒 Security Features
 

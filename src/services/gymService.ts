@@ -21,8 +21,7 @@ type GymWithProvince = Omit<Gym, 'province_id'> & { // province_id is still ther
 
 export class GymService {
   private mapRawGymToGymWithDetails(rawGymData: any, provinceData: Province | null, images: GymImage[] = [], tags: Tag[] = [], associatedTrainers: Trainer[] = []): GymWithDetails {
-    // Explicitly extract only the gym fields, excluding provinceData
-    const gymPart: Gym = {
+    const result: GymWithDetails = {
         id: rawGymData.id,
         name_th: rawGymData.name_th,
         name_en: rawGymData.name_en,
@@ -30,28 +29,11 @@ export class GymService {
         description_en: rawGymData.description_en,
         phone: rawGymData.phone,
         email: rawGymData.email,
-        province_id: rawGymData.province_id,
         map_url: rawGymData.map_url,
         youtube_url: rawGymData.youtube_url,
-        line_id: rawGymData.line_id, 
+        line_id: rawGymData.line_id,
         is_active: rawGymData.is_active,
         created_at: rawGymData.created_at,
-    };
-
-    const result: GymWithDetails = {
-        id: gymPart.id,
-        name_th: gymPart.name_th,
-        name_en: gymPart.name_en,
-        description_th: gymPart.description_th,
-        description_en: gymPart.description_en,
-        phone: gymPart.phone,
-        email: gymPart.email,
-        province_id: gymPart.province_id,
-        map_url: gymPart.map_url,
-        youtube_url: gymPart.youtube_url,
-        line_id: gymPart.line_id,
-        is_active: gymPart.is_active,
-        created_at: gymPart.created_at,
         images,
         tags,
         associatedTrainers,

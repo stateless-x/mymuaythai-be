@@ -59,7 +59,19 @@ export interface UpdateGymRequest extends Partial<Omit<NewGym, 'id' | 'created_a
 }
 
 // For displaying a gym with its related details
-export interface GymWithDetails extends Gym {
+export interface GymWithDetails {
+  id: string;
+  name_th: string;
+  name_en: string;
+  description_th: string | null;
+  description_en: string | null;
+  phone: string | null;
+  email: string | null;
+  map_url: string | null;
+  youtube_url: string | null;
+  line_id: string | null;
+  is_active: boolean;
+  created_at: Date;
   province?: Province | null;
   images?: GymImage[];
   tags?: Tag[]; // via gymTags

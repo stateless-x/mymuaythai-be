@@ -5,6 +5,7 @@ import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import { gymRoutes } from './routes/gyms';
 import { trainerRoutes } from './routes/trainers';
+import { provinceRoutes } from './routes/provinces';
 import { checkDatabaseConnection } from './db/config';
 
 // Create Fastify instance
@@ -66,6 +67,7 @@ fastify.get('/health', async (request, reply) => {
 fastify.register(async (fastify) => {
   await fastify.register(gymRoutes, { prefix: '/api' });
   await fastify.register(trainerRoutes, { prefix: '/api' });
+  await fastify.register(provinceRoutes, { prefix: '/api' });
 });
 
 // Error handler
