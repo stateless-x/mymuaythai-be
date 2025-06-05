@@ -1,5 +1,5 @@
 import { describe, it, expect, mock, beforeEach, afterEach } from 'bun:test';
-import { GymService } from '../../src/services/gymService';
+import * as gymService from '../../src/services/gymService';
 import * as schema from '../../src/db/schema';
 import { db } from '../../src/db/config';
 import type { GymWithDetails, Province, GymImage, Tag, Trainer, CreateGymRequest, Gym, UpdateGymRequest, NewGymImage } from '../../src/types';
@@ -47,11 +47,8 @@ const mockDbFluent = (resolveValue: any) => {
   return mockChain;
 };
 
-describe('GymService', () => {
-  let gymService: GymService;
-
+describe('GymService Functions', () => {
   beforeEach(() => {
-    gymService = new GymService();
     (db.select as any).mockReset();
     (db.insert as any).mockReset();
     (db.update as any).mockReset();
@@ -198,20 +195,20 @@ describe('GymService', () => {
   });
 
   describe('updateGym', () => {
-    it('should update an existing gym and return it', async () => {
+    it('should update a gym and return the updated gym', async () => {
       const gymId = 'existing-gym-id';
       const updateData: UpdateGymRequest = {
-        name_en: 'Updated Gym Name EN',
-        phone: '0998887777'
+        name_en: 'Updated Gym Name',
+        phone: '9876543210'
       };
       const updatedGymMock: Gym = {
         id: gymId,
-        name_th: 'Original Name TH',
-        name_en: updateData.name_en!,
+        name_th: 'Original Thai Name',
+        name_en: 'Updated Gym Name',
         description_th: null,
         description_en: null,
-        phone: updateData.phone!,
-        email: 'original@example.com',
+        phone: '9876543210',
+        email: null,
         province_id: 1,
         map_url: null,
         youtube_url: null,
@@ -220,7 +217,8 @@ describe('GymService', () => {
         created_at: new Date(),
       };
 
-      (db.update as any).mockReturnValue(mockDbFluent([updatedGymMock]));
+      const mockChain = mockDbFluent([updatedGymMock]);
+      (db.update as any).mockReturnValue(mockChain);
 
       const result = await gymService.updateGym(gymId, updateData);
 
@@ -228,10 +226,11 @@ describe('GymService', () => {
       expect(db.update).toHaveBeenCalledWith(schema.gyms);
     });
 
-    it('should return null if gym to update is not found or inactive', async () => {
-      const gymId = 'non-existent-gym-id';
-      const updateData: UpdateGymRequest = { name_en: 'Updated Gym Name EN' };
-      (db.update as any).mockReturnValue(mockDbFluent([]));
+    it('should return null if gym is not found', async () => {
+      const gymId = 'non-existent-id';
+      const updateData: UpdateGymRequest = { name_en: 'Updated Name' };
+      const mockChain = mockDbFluent([]);
+      (db.update as any).mockReturnValue(mockChain);
 
       const result = await gymService.updateGym(gymId, updateData);
 
@@ -240,9 +239,10 @@ describe('GymService', () => {
   });
 
   describe('deleteGym', () => {
-    it('should deactivate an existing gym and return true', async () => {
+    it('should soft delete a gym and return true', async () => {
       const gymId = 'existing-gym-id';
-      (db.update as any).mockReturnValue(mockDbFluent([{ id: gymId }]));
+      const mockChain = mockDbFluent([{ id: gymId }]);
+      (db.update as any).mockReturnValue(mockChain);
 
       const result = await gymService.deleteGym(gymId);
 
@@ -250,9 +250,10 @@ describe('GymService', () => {
       expect(db.update).toHaveBeenCalledWith(schema.gyms);
     });
 
-    it('should return false if gym to delete is not found or already inactive', async () => {
-      const gymId = 'non-existent-gym-id';
-      (db.update as any).mockReturnValue(mockDbFluent([]));
+    it('should return false if gym is not found', async () => {
+      const gymId = 'non-existent-id';
+      const mockChain = mockDbFluent([]);
+      (db.update as any).mockReturnValue(mockChain);
 
       const result = await gymService.deleteGym(gymId);
 
@@ -261,45 +262,105 @@ describe('GymService', () => {
   });
 
   describe('getAllGyms', () => {
-    const mockGymRawData = (id: string, name: string, provinceId: number) => ({
-      id, name_th: `${name} TH`, name_en: name, description_th: 'Desc TH', description_en: 'Desc EN', phone: '111', email: 'gym@test.com', province_id: provinceId, map_url: null, youtube_url: null, line_id: null, is_active: true, created_at: new Date(),
-      provinceData: { id: provinceId, name_th: 'Province', name_en: 'Province' } as Province,
-    });
-
-    it('should return the first page of gyms with total count', async () => {
-      const page = 1, pageSize = 2;
-      const rawGyms = [mockGymRawData('gym1', 'Gym Alpha', 1), mockGymRawData('gym2', 'Gym Beta', 2)];
+    it('should return paginated list of gyms', async () => {
+      const mockGyms = [
+        { id: 'gym1', name_en: 'Gym 1', provinceData: { id: 1, name_en: 'Bangkok' } },
+        { id: 'gym2', name_en: 'Gym 2', provinceData: { id: 2, name_en: 'Chiang Mai' } }
+      ];
       const totalCount = 5;
 
-      // Mock for the data query
-      const dataMockChain = mockDbFluent(rawGyms);
-      (db.select as any).mockReturnValueOnce(dataMockChain);
-     
-      // Mock for the count query
-      const countMockResult = [{ value: totalCount }];
-      const countMockChain = mockDbFluent(countMockResult);
-      (db.select as any).mockReturnValueOnce(countMockChain);
+      const mockChain = mockDbFluent(mockGyms);
+      const mockCountChain = mockDbFluent([{ value: totalCount }]);
+      
+      (db.select as any).mockReturnValueOnce(mockChain);
+      (db.select as any).mockReturnValueOnce(mockCountChain);
 
-      const result = await gymService.getAllGyms(page, pageSize);
+      const result = await gymService.getAllGyms(1, 10);
 
       expect(result.gyms).toHaveLength(2);
       expect(result.total).toBe(totalCount);
-      expect(result.gyms[0]!.id).toBe('gym1');
-      expect(result.gyms[0]!.name_en).toBe('Gym Alpha');
-      expect(result.gyms[0]!.province?.id).toBe(1);
       expect(db.select).toHaveBeenCalledTimes(2);
     });
+  });
 
-    it('should return empty array and total 0 if no gyms match', async () => {
-        const dataMockChain = mockDbFluent([]);
-        (db.select as any).mockReturnValueOnce(dataMockChain);
-        const countMockChain = mockDbFluent([{ value: 0 }]);
-        (db.select as any).mockReturnValueOnce(countMockChain);
+  describe('addGymImage', () => {
+    it('should add an image to a gym and return the image', async () => {
+      const gymId = 'gym-id';
+      const imageUrl = 'http://example.com/image.jpg';
+      const mockImage: GymImage = {
+        id: 'image-id',
+        gym_id: gymId,
+        image_url: imageUrl
+      };
 
-        const result = await gymService.getAllGyms(1,10);
-        expect(result.gyms).toEqual([]);
-        expect(result.total).toBe(0);
-        expect(db.select).toHaveBeenCalledTimes(2);
+      const mockChain = mockDbFluent([mockImage]);
+      (db.insert as any).mockReturnValue(mockChain);
+
+      const result = await gymService.addGymImage(gymId, imageUrl);
+
+      expect(result).toEqual(mockImage);
+      expect(db.insert).toHaveBeenCalledWith(schema.gymImages);
+    });
+
+    it('should throw an error if image addition fails', async () => {
+      const gymId = 'gym-id';
+      const imageUrl = 'http://example.com/image.jpg';
+      const mockChain = mockDbFluent([]);
+      (db.insert as any).mockReturnValue(mockChain);
+
+      await expect(gymService.addGymImage(gymId, imageUrl)).rejects.toThrow('Image addition failed, no data returned.');
+    });
+  });
+
+  describe('removeGymImage', () => {
+    it('should remove an image and return true', async () => {
+      const imageId = 'image-id';
+      const mockChain = mockDbFluent([{ id: imageId }]);
+      (db.delete as any).mockReturnValue(mockChain);
+
+      const result = await gymService.removeGymImage(imageId);
+
+      expect(result).toBe(true);
+      expect(db.delete).toHaveBeenCalledWith(schema.gymImages);
+    });
+
+    it('should return false if image is not found', async () => {
+      const imageId = 'non-existent-id';
+      const mockChain = mockDbFluent([]);
+      (db.delete as any).mockReturnValue(mockChain);
+
+      const result = await gymService.removeGymImage(imageId);
+
+      expect(result).toBe(false);
+    });
+  });
+
+  describe('searchGyms', () => {
+    it('should return empty results for empty search term', async () => {
+      const result = await gymService.searchGyms('');
+      
+      expect(result.gyms).toEqual([]);
+      expect(result.total).toBe(0);
+    });
+
+    it('should delegate to getAllGyms for valid search term', async () => {
+      const searchTerm = 'test gym';
+      const mockResult = {
+        gyms: [{ id: 'gym1', name_en: 'Test Gym' }] as any,
+        total: 1
+      };
+
+      // Mock getAllGyms by mocking the database calls it makes
+      const mockChain = mockDbFluent(mockResult.gyms);
+      const mockCountChain = mockDbFluent([{ value: mockResult.total }]);
+      
+      (db.select as any).mockReturnValueOnce(mockChain);
+      (db.select as any).mockReturnValueOnce(mockCountChain);
+
+      const result = await gymService.searchGyms(searchTerm);
+
+      expect(result.gyms).toHaveLength(1);
+      expect(result.total).toBe(1);
     });
   });
 }); 

@@ -15,6 +15,7 @@ A comprehensive backend platform for managing Muay Thai gyms and trainers in Tha
 - **Database Migrations**: Automated schema management with Drizzle Kit
 - **Sample Data**: Comprehensive seeding system for development and testing
 - **Pagination**: Advanced pagination support for all major endpoints (20 items per page default)
+- **Functional Service Layer**: Modern functional programming approach avoiding classes for better maintainability
 
 ## 🛠️ Tech Stack
 
@@ -25,7 +26,8 @@ A comprehensive backend platform for managing Muay Thai gyms and trainers in Tha
 - **ORM**: [Drizzle ORM](https://orm.drizzle.team/) - Modern, type-safe database toolkit
 - **Documentation**: Swagger/OpenAPI 3.0 - Auto-generated interactive API docs
 - **Security**: Helmet, CORS - Security middleware and protection
-- **Testing**: Bun built-in test runner with comprehensive service layer tests
+- **Testing**: Bun built-in test runner with comprehensive functional service layer tests
+- **Architecture**: Functional Service Layer Pattern - Clean, testable, and maintainable code structure
 
 ## 📋 Prerequisites
 
@@ -148,20 +150,20 @@ The platform uses a well-structured relational database with:
 - **Foreign Key Constraints**: Proper referential integrity
 - **Timestamps**: Creation tracking for auditing
 
-## 📄 API Endpoints
+## �� API Endpoints
 
-### Provinces
+### Functional Service Integration
 
-- `GET /api/provinces` - List all provinces (with sorting and region filtering)
-- `GET /api/provinces/:id` - Get specific province by ID
-- `GET /api/provinces/search/:query` - Search provinces by name (Thai/English)
-- `GET /api/provinces/region/:region` - Get provinces by region (central, eastern, northern, northeastern, southern, western)
-- `GET /api/provinces/stats` - Get province statistics and counts
-- Query parameters for `/api/provinces`:
-  - `?sort=en` - Sort by English name (default)
-  - `?sort=th` - Sort by Thai name
-  - `?region=central` - Filter by region
-  - `?stats=true` - Include gym counts per province
+All API endpoints now integrate with **functional service layer** for improved maintainability:
+
+```typescript
+// Route integration example
+import * as gymService from '../services/gymService';
+
+// Direct function calls - no class instantiation needed
+const gyms = await gymService.getAllGyms(page, pageSize, searchTerm, provinceId);
+const gym = await gymService.getGymById(id);
+```
 
 ### Gyms
 
@@ -175,12 +177,6 @@ The platform uses a well-structured relational database with:
 - `DELETE /api/gyms/:id` - Soft delete gym
 - `POST /api/gyms/:id/images` - Add gym image
 - `DELETE /api/gyms/images/:imageId` - Remove gym image
-
-**Gym Query Parameters:**
-- `?page=1` - Page number (default: 1)
-- `?pageSize=20` - Items per page (default: 20)
-- `?search=term` - Search by name or description
-- `?provinceId=16` - Filter by province
 
 ### Trainers
 
@@ -197,45 +193,19 @@ The platform uses a well-structured relational database with:
 - `POST /api/trainers/:id/classes` - Add class to trainer
 - `DELETE /api/trainers/:id/classes/:classId` - Remove class from trainer
 
-**Trainer Query Parameters:**
-- `?page=1` - Page number (default: 1)
-- `?pageSize=20` - Items per page (default: 20)
-- `?search=term` - Search by name, bio, province, or gym
-- `?provinceId=16` - Filter by province
-- `?gymId=uuid` - Filter by gym
-- `?isFreelance=true` - Filter freelance trainers
+### Tags
 
-### Pagination Response Format
-
-All paginated endpoints return data in this format:
-
-```json
-{
-  "success": true,
-  "data": {
-    "items": [...],        // Array of results
-    "total": 42,          // Total number of items
-    "page": 1,            // Current page
-    "pageSize": 20,       // Items per page
-    "totalPages": 3       // Total number of pages
-  },
-  "message": "Items retrieved successfully"
-}
-```
-
-Error responses:
-
-```json
-{
-  "success": false,
-  "error": "Error message",
-  "statusCode": 400
-}
-```
+- `GET /api/tags` - List all tags with pagination and optional usage statistics
+- `GET /api/tags/:id` - Get specific tag by ID
+- `GET /api/tags/search/:query` - Search tags by name (Thai/English)
+- `GET /api/tags/:id/stats` - Get tag usage statistics
+- `POST /api/tags` - Create new tag
+- `PUT /api/tags/:id` - Update tag details
+- `DELETE /api/tags/:id` - Delete tag (with usage validation)
 
 ## 🧪 Testing
 
-The project includes comprehensive test coverage using Bun's built-in test runner:
+The project includes comprehensive test coverage using Bun's built-in test runner with a modern functional testing approach:
 
 ```bash
 # Run all tests
@@ -244,14 +214,40 @@ bun test
 # Run specific test files
 bun test __tests__/services/gymService.test.ts
 bun test __tests__/services/trainerService.test.ts
+bun test __tests__/services/tagService.test.ts
 
 # Run tests with watch mode
 bun test --watch
 ```
 
-### Test Coverage
-- **GymService**: Complete CRUD operations, pagination, search, filtering, image management
-- **TrainerService**: Full trainer lifecycle, class assignments, freelance filtering, advanced search
+### Test Coverage & Architecture
+- **Functional Service Testing**: All service tests use functional approach, testing standalone exported functions
+- **GymService Functions**: Complete CRUD operations, pagination, search, filtering, image management
+- **TrainerService Functions**: Full trainer lifecycle, class assignments, freelance filtering, advanced search
+- **TagService Functions**: Tag management, usage statistics, search functionality with conflict resolution
+- **Type Safety**: Comprehensive TypeScript type compatibility testing
+- **Database Mocking**: Sophisticated Drizzle ORM mocking with fluent query builder simulation
+
+### Service Layer Architecture
+The services follow a **Functional Service Layer Pattern** instead of traditional class-based approaches:
+
+```typescript
+// ✅ Modern Functional Approach (Current)
+import * as gymService from '../services/gymService';
+const gym = await gymService.getGymById(id);
+const gyms = await gymService.getAllGyms(page, pageSize);
+
+// ❌ Old Class-based Approach (Deprecated)
+// const gymService = new GymService();
+// const gym = await gymService.getGymById(id);
+```
+
+**Benefits of Functional Approach:**
+- **Better Testability**: Standalone functions are easier to mock and test
+- **Reduced Complexity**: No class instantiation or state management
+- **Tree-shaking**: Better bundle optimization with unused function elimination
+- **Functional Programming**: Encourages immutable data flow and pure functions
+- **TypeScript Integration**: Enhanced type inference and intellisense support
 
 ## 📦 Available Scripts
 
@@ -293,19 +289,22 @@ src/
 ├── routes/
 │   ├── gyms.ts               # Gym API endpoints
 │   ├── trainers.ts           # Trainer API endpoints
+│   ├── tags.ts               # Tag API endpoints  
 │   └── provinces.ts          # Province API endpoints (read-only)
-├── services/
-│   ├── gymService.ts         # Gym business logic
-│   ├── trainerService.ts     # Trainer business logic (Drizzle ORM)
-│   └── provinceService.ts    # Province business logic
+├── services/                 # Functional Service Layer (Business Logic)
+│   ├── gymService.ts         # Gym business logic - standalone functions
+│   ├── trainerService.ts     # Trainer business logic - standalone functions
+│   ├── tagService.ts         # Tag business logic - standalone functions
+│   └── provinceService.ts    # Province business logic (class-based for legacy compatibility)
 ├── types/
 │   └── index.ts              # TypeScript type definitions
 └── server.ts                 # Main application entry point
 
 __tests__/
-└── services/                 # Service layer tests
-    ├── gymService.test.ts    # Comprehensive gym service tests
-    └── trainerService.test.ts # Complete trainer service tests
+└── services/                 # Functional Service Layer Tests
+    ├── gymService.test.ts    # Comprehensive functional gym service tests
+    ├── trainerService.test.ts # Complete functional trainer service tests
+    └── tagService.test.ts    # Functional tag service tests with conflict resolution
 
 drizzle.config.ts             # Drizzle ORM configuration
 package.json                  # Dependencies and scripts
@@ -369,7 +368,8 @@ The 77 provinces are organized into 6 geographical regions:
 - **Database GUI**: Drizzle Studio for visual database management
 - **Structured Logging**: Beautiful console output with pino-pretty
 - **Error Handling**: Comprehensive error handling with proper HTTP status codes
-- **Comprehensive Testing**: Bun test runner with full service layer coverage
+- **Comprehensive Testing**: Bun test runner with functional service layer coverage
+- **Functional Architecture**: Modern service layer pattern for better maintainability and testability
 
 ## 🚀 Future Enhancements
 
@@ -385,6 +385,7 @@ Planned features and improvements:
 - [ ] **Mobile API Extensions**: Additional endpoints for mobile app features
 - [ ] **Multi-tenant Support**: Support for multiple gym chains
 - [ ] **Advanced Analytics**: Reporting and analytics dashboard
+- [ ] **Service Layer Expansion**: Continue functional pattern adoption across all services
 
 ## 🤝 Contributing
 
@@ -398,9 +399,11 @@ Planned features and improvements:
 
 - Follow TypeScript best practices and maintain type safety
 - Use Drizzle ORM for all database operations
-- Write comprehensive tests for new features
+- **Adopt Functional Service Layer Pattern**: Use standalone exported functions instead of classes
+- Write comprehensive tests for new features using functional testing approach
 - Update API documentation for new endpoints
 - Follow the existing code structure and naming conventions
+- Prefer functional programming patterns and immutable data flow
 
 ## 📄 License
 

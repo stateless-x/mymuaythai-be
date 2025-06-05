@@ -1,5 +1,5 @@
 import { describe, it, expect, mock, beforeEach, afterEach } from 'bun:test';
-import { TagService } from '../../src/services/tagService';
+import * as tagService from '../../src/services/tagService';
 import * as schema from '../../src/db/schema';
 import { db } from '../../src/db/config';
 import type { Tag, NewTag } from '../../src/types';
@@ -43,11 +43,8 @@ const mockDbFluent = (resolveValue: any) => {
   return mockChain;
 };
 
-describe('TagService', () => {
-  let tagService: TagService;
-
+describe('TagService Functions', () => {
   beforeEach(() => {
-    tagService = new TagService();
     (db.select as any).mockReset();
     (db.insert as any).mockReset();
     (db.update as any).mockReset();

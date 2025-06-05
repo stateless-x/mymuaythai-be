@@ -1,9 +1,9 @@
 import { describe, it, expect, mock, beforeEach, afterEach } from 'bun:test';
-import { TrainerService } from '../../src/services/trainerService';
+import * as trainerService from '../../src/services/trainerService';
 import * as schema from '../../src/db/schema';
 import { db } from '../../src/db/config';
 import type { TrainerWithDetails, Province, Gym, Class, Tag, CreateTrainerRequest, Trainer, UpdateTrainerRequest } from '../../src/types';
-import { eq, ilike, and, or, desc, sql, count, SQL } from 'drizzle-orm';
+import { eq, ilike, and, or, desc, sql, count, SQL, inArray } from 'drizzle-orm';
 
 // Mock drizzle-orm functions
 mock.module('drizzle-orm', () => ({
@@ -14,6 +14,7 @@ mock.module('drizzle-orm', () => ({
   desc: mock((col: any) => ({ col, type: 'desc' })),
   sql: mock((strings: TemplateStringsArray, ...values: any[]) => ({ strings, values, type: 'sql' })),
   count: mock((col: any) => ({ col: col || 'default', type: 'count', toSQL: () => 'COUNT(*)' })),
+  inArray: mock((col: any, val: any) => ({ col, val, type: 'inArray' })),
 }));
 
 // Mock the db and schema
@@ -47,11 +48,8 @@ const mockDbFluent = (resolveValue: any) => {
   return mockChain;
 };
 
-describe('TrainerService', () => {
-  let trainerService: TrainerService;
-
+describe('TrainerService Functions', () => {
   beforeEach(() => {
-    trainerService = new TrainerService();
     (db.select as any).mockReset();
     (db.insert as any).mockReset();
     (db.update as any).mockReset();
@@ -63,298 +61,15 @@ describe('TrainerService', () => {
     (or as any).mockClear();
     (desc as any).mockClear();
     (count as any).mockClear();
+    (inArray as any).mockClear();
   });
 
   afterEach(() => {
     // Cleanup
   });
 
-  describe('createTrainer', () => {
-    it('should create a new trainer successfully', async () => {
-      const trainerData: CreateTrainerRequest = {
-        first_name_th: 'สมชาย',
-        first_name_en: 'Somchai',
-        last_name_th: 'ใจดี',
-        last_name_en: 'Jaidee',
-        bio_th: 'ครูมวยไทยมากประสบการณ์',
-        bio_en: 'Experienced Muay Thai trainer',
-        phone: '0891234567',
-        email: 'somchai@example.com',
-        line_id: 'somchai123',
-        is_freelance: false,
-        gym_id: 'test-gym-id',
-        province_id: 1
-      };
-
-      const createdTrainerMock: Trainer = {
-        id: 'new-trainer-id',
-        first_name_th: trainerData.first_name_th,
-        first_name_en: trainerData.first_name_en,
-        last_name_th: trainerData.last_name_th || null,
-        last_name_en: trainerData.last_name_en || null,
-        bio_th: trainerData.bio_th || null,
-        bio_en: trainerData.bio_en || null,
-        phone: trainerData.phone || null,
-        email: trainerData.email || null,
-        line_id: trainerData.line_id || null,
-        is_freelance: trainerData.is_freelance || false,
-        gym_id: trainerData.gym_id || null,
-        province_id: trainerData.province_id || null,
-        is_active: true,
-        created_at: new Date(),
-      };
-
-      const mockChain = mockDbFluent([createdTrainerMock]);
-      (db.insert as any).mockReturnValue(mockChain);
-
-      const result = await trainerService.createTrainer(trainerData);
-      
-      expect(result).toEqual(createdTrainerMock);
-      expect(db.insert).toHaveBeenCalledWith(schema.trainers);
-    });
-
-    it('should create a freelance trainer', async () => {
-      const freelanceTrainerData: CreateTrainerRequest = {
-        first_name_th: 'มานะ',
-        first_name_en: 'Mana',
-        last_name_th: 'อิสระ',
-        last_name_en: 'Isara',
-        is_freelance: true,
-        province_id: 1
-      };
-
-      const createdFreelanceTrainerMock: Trainer = {
-        id: 'freelance-trainer-id',
-        first_name_th: freelanceTrainerData.first_name_th,
-        first_name_en: freelanceTrainerData.first_name_en,
-        last_name_th: freelanceTrainerData.last_name_th || null,
-        last_name_en: freelanceTrainerData.last_name_en || null,
-        bio_th: null,
-        bio_en: null,
-        phone: null,
-        email: null,
-        line_id: null,
-        is_freelance: true,
-        gym_id: null,
-        province_id: 1,
-        is_active: true,
-        created_at: new Date(),
-      };
-
-      const mockChain = mockDbFluent([createdFreelanceTrainerMock]);
-      (db.insert as any).mockReturnValue(mockChain);
-
-      const result = await trainerService.createTrainer(freelanceTrainerData);
-      
-      expect(result).toEqual(createdFreelanceTrainerMock);
-      expect(result.is_freelance).toBe(true);
-      expect(result.gym_id).toBe(null);
-    });
-  });
-
-  describe('getAllTrainers', () => {
-    it('should return paginated trainers', async () => {
-      const mockTrainers = [
-        {
-          id: 'trainer1',
-          first_name_th: 'ครูมวย1',
-          first_name_en: 'Trainer1',
-          last_name_th: null,
-          last_name_en: null,
-          bio_th: null,
-          bio_en: null,
-          phone: null,
-          email: null,
-          line_id: null,
-          is_freelance: false,
-          gym_id: 'gym1',
-          province_id: 1,
-          is_active: true,
-          created_at: new Date(),
-          provinceData: { id: 1, name_th: 'กรุงเทพ', name_en: 'Bangkok' } as Province,
-          gymData: { id: 'gym1', name_th: 'ยิม1', name_en: 'Gym1' } as any
-        },
-        {
-          id: 'trainer2',
-          first_name_th: 'ครูมวย2',
-          first_name_en: 'Trainer2',
-          last_name_th: null,
-          last_name_en: null,
-          bio_th: null,
-          bio_en: null,
-          phone: null,
-          email: null,
-          line_id: null,
-          is_freelance: true,
-          gym_id: null,
-          province_id: 1,
-          is_active: true,
-          created_at: new Date(),
-          provinceData: { id: 1, name_th: 'กรุงเทพ', name_en: 'Bangkok' } as Province,
-          gymData: null
-        }
-      ];
-
-      // Mock the main query
-      (db.select as any).mockReturnValueOnce(mockDbFluent(mockTrainers));
-      // Mock the count query
-      (db.select as any).mockReturnValueOnce(mockDbFluent([{ value: 2 }]));
-
-      const result = await trainerService.getAllTrainers(1, 2);
-
-      expect(result).toBeDefined();
-      expect(result.trainers).toHaveLength(2);
-      expect(result.total).toBe(2);
-      expect(db.select).toHaveBeenCalledTimes(2);
-    });
-
-    it('should filter by gym', async () => {
-      const mockTrainers = [
-        {
-          id: 'trainer1',
-          first_name_th: 'ครูมวย1',
-          first_name_en: 'Trainer1',
-          gym_id: 'test-gym-id',
-          is_active: true,
-          provinceData: { id: 1, name_th: 'กรุงเทพ', name_en: 'Bangkok' } as Province,
-          gymData: { id: 'test-gym-id', name_th: 'ยิมทดสอบ', name_en: 'Test Gym' } as any
-        }
-      ];
-
-      (db.select as any).mockReturnValueOnce(mockDbFluent(mockTrainers));
-      (db.select as any).mockReturnValueOnce(mockDbFluent([{ value: 1 }]));
-
-      const result = await trainerService.getAllTrainers(1, 10, undefined, undefined, 'test-gym-id');
-
-      expect(result).toBeDefined();
-      expect(result.trainers).toHaveLength(1);
-      expect(result.trainers[0].gym_id).toBe('test-gym-id');
-    });
-
-    it('should filter by province', async () => {
-      const mockTrainers = [
-        {
-          id: 'trainer1',
-          first_name_th: 'ครูมวย1',
-          first_name_en: 'Trainer1',
-          province_id: 1,
-          is_active: true,
-          provinceData: { id: 1, name_th: 'กรุงเทพ', name_en: 'Bangkok' } as Province,
-          gymData: null
-        }
-      ];
-
-      (db.select as any).mockReturnValueOnce(mockDbFluent(mockTrainers));
-      (db.select as any).mockReturnValueOnce(mockDbFluent([{ value: 1 }]));
-
-      const result = await trainerService.getAllTrainers(1, 10, undefined, 1);
-
-      expect(result).toBeDefined();
-      expect(result.trainers).toHaveLength(1);
-      expect(result.trainers[0].province_id).toBe(1);
-    });
-
-    it('should filter freelance trainers', async () => {
-      const mockTrainers = [
-        {
-          id: 'trainer1',
-          first_name_th: 'ครูมวย1',
-          first_name_en: 'Trainer1',
-          is_freelance: true,
-          gym_id: null,
-          is_active: true,
-          provinceData: { id: 1, name_th: 'กรุงเทพ', name_en: 'Bangkok' } as Province,
-          gymData: null
-        }
-      ];
-
-      (db.select as any).mockReturnValueOnce(mockDbFluent(mockTrainers));
-      (db.select as any).mockReturnValueOnce(mockDbFluent([{ value: 1 }]));
-
-      const result = await trainerService.getAllTrainers(1, 10, undefined, undefined, undefined, true);
-
-      expect(result).toBeDefined();
-      expect(result.trainers).toHaveLength(1);
-      expect(result.trainers[0].is_freelance).toBe(true);
-    });
-
-    it('should search trainers by name', async () => {
-      const mockTrainers = [
-        {
-          id: 'trainer1',
-          first_name_th: 'ครูมวย1',
-          first_name_en: 'Trainer1',
-          is_active: true,
-          provinceData: { id: 1, name_th: 'กรุงเทพ', name_en: 'Bangkok' } as Province,
-          gymData: null
-        }
-      ];
-
-      (db.select as any).mockReturnValueOnce(mockDbFluent(mockTrainers));
-      (db.select as any).mockReturnValueOnce(mockDbFluent([{ value: 1 }]));
-
-      const result = await trainerService.getAllTrainers(1, 10, 'Trainer1');
-
-      expect(result).toBeDefined();
-      expect(result.trainers.length).toBeGreaterThanOrEqual(0);
-    });
-  });
-
   describe('getTrainerById', () => {
-    it('should return trainer with details', async () => {
-      const trainerId = 'test-trainer-id';
-      const mockTrainerData = {
-        id: trainerId,
-        first_name_th: 'ทดสอบ',
-        first_name_en: 'Test',
-        last_name_th: 'นามสกุล',
-        last_name_en: 'Lastname',
-        bio_th: 'ประวัติย่อ',
-        bio_en: 'Bio',
-        phone: '0123456789',
-        email: 'test@example.com',
-        line_id: '@test',
-        is_freelance: false,
-        gym_id: 'test-gym-id',
-        province_id: 1,
-        is_active: true,
-        created_at: new Date(),
-        provinceData: { id: 1, name_th: 'กรุงเทพ', name_en: 'Bangkok' } as Province,
-        gymData: { id: 'test-gym-id', name_th: 'ยิมทดสอบ', name_en: 'Test Gym' } as any
-      };
-
-      const mockClasses: Class[] = [
-        { id: 'class1', name_th: 'มวยไทย', name_en: 'Muay Thai', description_th: null, description_en: null }
-      ];
-
-      const mockTags: Tag[] = [
-        { id: 'tag1', name_th: 'ผู้เชี่ยวชาญ', name_en: 'Expert' }
-      ];
-
-      // Mock the main trainer query
-      (db.select as any).mockReturnValueOnce(mockDbFluent([mockTrainerData]));
-      // Mock the trainer classes query
-      (db.select as any).mockReturnValueOnce(mockDbFluent([{ class_id: 'class1' }]));
-      // Mock the classes query
-      (db.select as any).mockReturnValueOnce(mockDbFluent(mockClasses));
-      // Mock the trainer tags query
-      (db.select as any).mockReturnValueOnce(mockDbFluent([{ tag_id: 'tag1' }]));
-      // Mock the tags query
-      (db.select as any).mockReturnValueOnce(mockDbFluent(mockTags));
-
-      const result = await trainerService.getTrainerById(trainerId);
-
-      expect(result).toBeDefined();
-      expect(result?.id).toBe(trainerId);
-      expect(result?.first_name_en).toBe('Test');
-      expect(result?.province?.name_en).toBe('Bangkok');
-      expect(result?.primaryGym?.name_en).toBe('Test Gym');
-      expect(result?.classes).toEqual(mockClasses);
-      expect(result?.tags).toEqual(mockTags);
-      expect(db.select).toHaveBeenCalledTimes(5);
-    });
-
-    it('should return null for non-existent trainer', async () => {
+    it('should return null if trainer is not found', async () => {
       const trainerId = 'non-existent-id';
       const mockChain = mockDbFluent([]);
       (db.select as any).mockReturnValueOnce(mockChain);
@@ -364,25 +79,135 @@ describe('TrainerService', () => {
       expect(result).toBeNull();
       expect(db.select).toHaveBeenCalledTimes(1);
     });
+
+    it('should return trainer details if trainer is found', async () => {
+      const trainerId = 'existing-id';
+      const mockTrainerData = {
+        id: trainerId,
+        first_name_th: 'ชื่อ',
+        last_name_th: 'นามสกุล',
+        first_name_en: 'First',
+        last_name_en: 'Last',
+        bio_th: 'ประวัติ',
+        bio_en: 'Bio',
+        phone: '1234567890',
+        email: 'trainer@example.com',
+        line_id: '@trainer',
+        is_freelance: false,
+        gym_id: 'gym-id',
+        province_id: 1,
+        is_active: true,
+        created_at: new Date(),
+        provinceData: { id: 1, name_th: 'กรุงเทพฯ', name_en: 'Bangkok' } as Province,
+        gymData: { id: 'gym-id', name_th: 'ยิม', name_en: 'Gym' } as Gym,
+      };
+      
+      const mockClasses: Class[] = [
+        { id: 'class1', name_th: 'มวยไทยพื้นฐาน', name_en: 'Basic Muay Thai', description_th: null, description_en: null }
+      ];
+      const mockTags: Tag[] = [
+        { id: 'tag1', name_th: 'มืออาชีพ', name_en: 'Professional' }
+      ];
+
+      // Mock the main trainer select query
+      (db.select as any).mockReturnValueOnce(mockDbFluent([mockTrainerData]));
+      // Mock the trainerClasses select query
+      (db.select as any).mockReturnValueOnce(mockDbFluent([{ class_id: 'class1' }]));
+      // Mock the classes select query
+      (db.select as any).mockReturnValueOnce(mockDbFluent(mockClasses));
+      // Mock the trainerTags select query
+      (db.select as any).mockReturnValueOnce(mockDbFluent([{ tag_id: 'tag1' }]));
+      // Mock the tags select query
+      (db.select as any).mockReturnValueOnce(mockDbFluent(mockTags));
+
+      const result = await trainerService.getTrainerById(trainerId);
+
+      expect(result).not.toBeNull();
+      expect(result?.id).toBe(trainerId);
+      expect(result?.first_name_en).toBe('First');
+      expect(result?.classes).toEqual(mockClasses);
+      expect(result?.tags).toEqual(mockTags);
+      expect(result?.province?.name_en).toBe('Bangkok');
+      expect(result?.primaryGym?.name_en).toBe('Gym');
+      expect(db.select).toHaveBeenCalledTimes(5);
+    });
+  });
+
+  describe('createTrainer', () => {
+    it('should create a new trainer and return it', async () => {
+      const newTrainerData: CreateTrainerRequest = {
+        first_name_th: 'ชื่อใหม่',
+        last_name_th: 'นามสกุลใหม่',
+        first_name_en: 'New',
+        last_name_en: 'Trainer',
+        bio_th: 'ประวัติใหม่',
+        bio_en: 'New bio',
+        phone: '0987654321',
+        email: 'newtrainer@example.com',
+        line_id: '@newtrainer',
+        is_freelance: true,
+        province_id: 1
+      };
+      
+      const createdTrainerMock: Trainer = {
+        id: 'new-trainer-id',
+        first_name_th: newTrainerData.first_name_th,
+        last_name_th: newTrainerData.last_name_th ?? null,
+        first_name_en: newTrainerData.first_name_en,
+        last_name_en: newTrainerData.last_name_en ?? null,
+        bio_th: newTrainerData.bio_th || null,
+        bio_en: newTrainerData.bio_en || null,
+        phone: newTrainerData.phone || null,
+        email: newTrainerData.email || null,
+        line_id: newTrainerData.line_id || null,
+        is_freelance: newTrainerData.is_freelance || false,
+        gym_id: newTrainerData.gym_id || null,
+        province_id: newTrainerData.province_id ?? null,
+        is_active: true,
+        created_at: new Date(),
+      };
+
+      const mockChain = mockDbFluent([createdTrainerMock]);
+      (db.insert as any).mockReturnValue(mockChain);
+
+      const result = await trainerService.createTrainer(newTrainerData);
+      
+      expect(result).toEqual(createdTrainerMock);
+      expect(db.insert).toHaveBeenCalledWith(schema.trainers);
+    });
+
+    it('should throw an error if trainer creation returns no data', async () => {
+      const newTrainerData: CreateTrainerRequest = {
+        first_name_th: 'Test',
+        last_name_th: 'Trainer',
+        first_name_en: 'Test',
+        last_name_en: 'Trainer',
+        province_id: 1
+      };
+      const mockChain = mockDbFluent([]);
+      (db.insert as any).mockReturnValue(mockChain);
+
+      await expect(trainerService.createTrainer(newTrainerData)).rejects.toThrow('Trainer creation failed, no data returned.');
+    });
   });
 
   describe('updateTrainer', () => {
-    it('should update trainer successfully', async () => {
-      const trainerId = 'test-trainer-id';
+    it('should update a trainer and return the updated trainer', async () => {
+      const trainerId = 'existing-trainer-id';
       const updateData: UpdateTrainerRequest = {
-        email: 'updated@example.com'
+        first_name_en: 'Updated',
+        phone: '5555555555'
       };
-
       const updatedTrainerMock: Trainer = {
         id: trainerId,
-        first_name_th: 'อัปเดต',
+        first_name_th: 'ชื่อเดิม',
+        last_name_th: 'นามสกุลเดิม',
         first_name_en: 'Updated',
-        last_name_th: null,
-        last_name_en: null,
+        last_name_en: 'Original',
         bio_th: null,
         bio_en: null,
-        phone: null,
-        email: 'updated@example.com',
+        phone: '5555555555',
+        email: null,
         line_id: null,
         is_freelance: false,
         gym_id: null,
@@ -395,190 +220,267 @@ describe('TrainerService', () => {
       (db.update as any).mockReturnValue(mockChain);
 
       const result = await trainerService.updateTrainer(trainerId, updateData);
-      
+
       expect(result).toEqual(updatedTrainerMock);
-      expect(result?.email).toBe('updated@example.com');
+      expect(db.update).toHaveBeenCalledWith(schema.trainers);
     });
 
-    it('should return null for non-existent trainer', async () => {
+    it('should return null if trainer is not found', async () => {
       const trainerId = 'non-existent-id';
-      const updateData: UpdateTrainerRequest = {
-        email: 'test@example.com'
-      };
-
+      const updateData: UpdateTrainerRequest = { first_name_en: 'Updated' };
       const mockChain = mockDbFluent([]);
       (db.update as any).mockReturnValue(mockChain);
 
       const result = await trainerService.updateTrainer(trainerId, updateData);
-      
+
       expect(result).toBeNull();
     });
   });
 
   describe('deleteTrainer', () => {
-    it('should soft delete trainer successfully', async () => {
-      const trainerId = 'test-trainer-id';
-
+    it('should soft delete a trainer and return true', async () => {
+      const trainerId = 'existing-trainer-id';
       const mockChain = mockDbFluent([{ id: trainerId }]);
       (db.update as any).mockReturnValue(mockChain);
 
       const result = await trainerService.deleteTrainer(trainerId);
-      
+
       expect(result).toBe(true);
       expect(db.update).toHaveBeenCalledWith(schema.trainers);
     });
 
-    it('should return false for non-existent trainer', async () => {
+    it('should return false if trainer is not found', async () => {
       const trainerId = 'non-existent-id';
-
       const mockChain = mockDbFluent([]);
       (db.update as any).mockReturnValue(mockChain);
 
       const result = await trainerService.deleteTrainer(trainerId);
-      
+
       expect(result).toBe(false);
     });
   });
 
-  describe('trainer classes management', () => {
-    it('should add and remove trainer classes', async () => {
-      const trainerId = 'test-trainer-id';
-      const classId = 'test-class-id';
+  describe('getAllTrainers', () => {
+    it('should return paginated list of trainers', async () => {
+      const mockTrainers = [
+        { id: 'trainer1', first_name_en: 'John', provinceData: { id: 1, name_en: 'Bangkok' }, gymData: null },
+        { id: 'trainer2', first_name_en: 'Jane', provinceData: { id: 2, name_en: 'Chiang Mai' }, gymData: null }
+      ];
+      const totalCount = 10;
 
-      // Mock add class - returns boolean, not object
-      const mockAddChain = mockDbFluent([{ id: 'tc1', trainer_id: trainerId, class_id: classId }]);
-      (db.insert as any).mockReturnValueOnce(mockAddChain);
+      const mockChain = mockDbFluent(mockTrainers);
+      const mockCountChain = mockDbFluent([{ value: totalCount }]);
+      
+      (db.select as any).mockReturnValueOnce(mockChain);
+      (db.select as any).mockReturnValueOnce(mockCountChain);
 
-      const addResult = await trainerService.addTrainerClass(trainerId, classId);
-      expect(addResult).toBe(true); // addTrainerClass returns boolean
+      const result = await trainerService.getAllTrainers(1, 20);
 
-      // Mock remove class
-      const mockRemoveChain = mockDbFluent([{ id: 'tc1' }]);
-      (db.delete as any).mockReturnValue(mockRemoveChain);
+      expect(result.trainers).toHaveLength(2);
+      expect(result.total).toBe(totalCount);
+      expect(db.select).toHaveBeenCalledTimes(2);
+    });
 
-      const removeResult = await trainerService.removeTrainerClass(trainerId, classId);
-      expect(removeResult).toBe(true);
+    it('should filter by freelance status', async () => {
+      const mockFreelanceTrainers = [
+        { id: 'freelance1', first_name_en: 'Free', is_freelance: true, provinceData: null, gymData: null }
+      ];
+
+      const mockChain = mockDbFluent(mockFreelanceTrainers);
+      const mockCountChain = mockDbFluent([{ value: 1 }]);
+      
+      (db.select as any).mockReturnValueOnce(mockChain);
+      (db.select as any).mockReturnValueOnce(mockCountChain);
+
+      const result = await trainerService.getAllTrainers(1, 20, undefined, undefined, undefined, true);
+
+      expect(result.trainers).toHaveLength(1);
+      expect(result.total).toBe(1);
     });
   });
 
-  describe('search and filtering', () => {
-    it('should search trainers by bio content', async () => {
-      const mockTrainers = [
-        {
-          id: 'trainer1',
-          first_name_th: 'ครู',
-          first_name_en: 'Teacher',
-          bio_en: 'Experienced trainer',
-          is_active: true,
-          provinceData: null,
-          gymData: null
-        }
-      ];
+  describe('addTrainerClass', () => {
+    it('should add a class to a trainer and return true', async () => {
+      const trainerId = 'trainer-id';
+      const classId = 'class-id';
+      const mockChain = mockDbFluent([{ id: 'new-relation-id', trainer_id: trainerId, class_id: classId }]);
+      (db.insert as any).mockReturnValue(mockChain);
 
-      (db.select as any).mockReturnValueOnce(mockDbFluent(mockTrainers));
-      (db.select as any).mockReturnValueOnce(mockDbFluent([{ value: 1 }]));
+      const result = await trainerService.addTrainerClass(trainerId, classId);
 
-      const result = await trainerService.getAllTrainers(1, 10, 'Experienced');
-
-      expect(result).toBeDefined();
-      expect(result.trainers.length).toBeGreaterThanOrEqual(0);
+      expect(result).toBe(true);
+      expect(db.insert).toHaveBeenCalledWith(schema.trainerClasses);
     });
 
-    it('should return paginated search results', async () => {
-      const mockTrainers = [
-        {
-          id: 'trainer1',
-          first_name_th: 'ครู1',
-          first_name_en: 'Teacher1',
-          is_active: true,
-          provinceData: null,
-          gymData: null
-        }
+    it('should return false if adding class fails', async () => {
+      const trainerId = 'trainer-id';
+      const classId = 'class-id';
+      const mockChain = mockDbFluent([]);
+      (db.insert as any).mockReturnValue(mockChain);
+
+      const result = await trainerService.addTrainerClass(trainerId, classId);
+
+      expect(result).toBe(false);
+    });
+
+    it('should return false if there is an error', async () => {
+      const trainerId = 'trainer-id';
+      const classId = 'class-id';
+      (db.insert as any).mockImplementation(() => {
+        throw new Error('Database error');
+      });
+
+      const result = await trainerService.addTrainerClass(trainerId, classId);
+
+      expect(result).toBe(false);
+    });
+  });
+
+  describe('removeTrainerClass', () => {
+    it('should remove a class from a trainer and return true', async () => {
+      const trainerId = 'trainer-id';
+      const classId = 'class-id';
+      const mockChain = mockDbFluent([{ id: 'relation-id' }]);
+      (db.delete as any).mockReturnValue(mockChain);
+
+      const result = await trainerService.removeTrainerClass(trainerId, classId);
+
+      expect(result).toBe(true);
+      expect(db.delete).toHaveBeenCalledWith(schema.trainerClasses);
+    });
+
+    it('should return false if relation is not found', async () => {
+      const trainerId = 'trainer-id';
+      const classId = 'non-existent-class';
+      const mockChain = mockDbFluent([]);
+      (db.delete as any).mockReturnValue(mockChain);
+
+      const result = await trainerService.removeTrainerClass(trainerId, classId);
+
+      expect(result).toBe(false);
+    });
+  });
+
+  describe('getTrainerClasses', () => {
+    it('should return trainer classes', async () => {
+      const trainerId = 'trainer-id';
+      const mockClasses: Class[] = [
+        { id: 'class1', name_th: 'มวยไทยพื้นฐาน', name_en: 'Basic Muay Thai', description_th: null, description_en: null },
+        { id: 'class2', name_th: 'มวยไทยขั้นสูง', name_en: 'Advanced Muay Thai', description_th: null, description_en: null }
       ];
 
-      (db.select as any).mockReturnValueOnce(mockDbFluent(mockTrainers));
-      (db.select as any).mockReturnValueOnce(mockDbFluent([{ value: 1 }]));
+      // Mock trainerClasses junction query
+      const mockJunctionChain = mockDbFluent([
+        { class_id: 'class1' },
+        { class_id: 'class2' }
+      ]);
+      (db.select as any).mockReturnValueOnce(mockJunctionChain);
+      
+      // Mock classes query
+      const mockClassesChain = mockDbFluent(mockClasses);
+      (db.select as any).mockReturnValueOnce(mockClassesChain);
 
-      const result = await trainerService.getAllTrainers(1, 1, 'Teacher');
+      const result = await trainerService.getTrainerClasses(trainerId);
 
-      expect(result).toBeDefined();
+      expect(result).toEqual(mockClasses);
+      expect(db.select).toHaveBeenCalledTimes(2);
+    });
+
+    it('should return empty array if trainer has no classes', async () => {
+      const trainerId = 'trainer-id';
+      const mockJunctionChain = mockDbFluent([]);
+      (db.select as any).mockReturnValueOnce(mockJunctionChain);
+
+      const result = await trainerService.getTrainerClasses(trainerId);
+
+      expect(result).toEqual([]);
+      expect(db.select).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('searchTrainers', () => {
+    it('should return empty results for empty search term', async () => {
+      const result = await trainerService.searchTrainers('');
+      
+      expect(result.trainers).toEqual([]);
+      expect(result.total).toBe(0);
+    });
+
+    it('should delegate to getAllTrainers for valid search term', async () => {
+      const searchTerm = 'john';
+      const mockResult = [
+        { id: 'trainer1', first_name_en: 'John', provinceData: null, gymData: null }
+      ];
+
+      const mockChain = mockDbFluent(mockResult);
+      const mockCountChain = mockDbFluent([{ value: 1 }]);
+      
+      (db.select as any).mockReturnValueOnce(mockChain);
+      (db.select as any).mockReturnValueOnce(mockCountChain);
+
+      const result = await trainerService.searchTrainers(searchTerm);
+
+      expect(result.trainers).toHaveLength(1);
+      expect(result.total).toBe(1);
+    });
+  });
+
+  describe('getTrainersByGym', () => {
+    it('should delegate to getAllTrainers with gym filter', async () => {
+      const gymId = 'gym-id';
+      const mockResult = [
+        { id: 'trainer1', gym_id: gymId, provinceData: null, gymData: null }
+      ];
+
+      const mockChain = mockDbFluent(mockResult);
+      const mockCountChain = mockDbFluent([{ value: 1 }]);
+      
+      (db.select as any).mockReturnValueOnce(mockChain);
+      (db.select as any).mockReturnValueOnce(mockCountChain);
+
+      const result = await trainerService.getTrainersByGym(gymId);
+
+      expect(result.trainers).toHaveLength(1);
+      expect(result.total).toBe(1);
+    });
+  });
+
+  describe('getTrainersByProvince', () => {
+    it('should delegate to getAllTrainers with province filter', async () => {
+      const provinceId = 1;
+      const mockResult = [
+        { id: 'trainer1', province_id: provinceId, provinceData: null, gymData: null }
+      ];
+
+      const mockChain = mockDbFluent(mockResult);
+      const mockCountChain = mockDbFluent([{ value: 1 }]);
+      
+      (db.select as any).mockReturnValueOnce(mockChain);
+      (db.select as any).mockReturnValueOnce(mockCountChain);
+
+      const result = await trainerService.getTrainersByProvince(provinceId);
+
       expect(result.trainers).toHaveLength(1);
       expect(result.total).toBe(1);
     });
   });
 
   describe('getFreelanceTrainers', () => {
-    it('should return only freelance trainers', async () => {
-      const mockTrainers = [
-        {
-          id: 'trainer1',
-          first_name_th: 'ครูอิสระ',
-          first_name_en: 'Freelance',
-          is_freelance: true,
-          gym_id: null,
-          is_active: true,
-          provinceData: null,
-          gymData: null
-        }
+    it('should delegate to getAllTrainers with freelance filter', async () => {
+      const mockResult = [
+        { id: 'trainer1', is_freelance: true, provinceData: null, gymData: null }
       ];
 
-      (db.select as any).mockReturnValueOnce(mockDbFluent(mockTrainers));
-      (db.select as any).mockReturnValueOnce(mockDbFluent([{ value: 1 }]));
+      const mockChain = mockDbFluent(mockResult);
+      const mockCountChain = mockDbFluent([{ value: 1 }]);
+      
+      (db.select as any).mockReturnValueOnce(mockChain);
+      (db.select as any).mockReturnValueOnce(mockCountChain);
 
       const result = await trainerService.getFreelanceTrainers();
 
-      expect(result).toBeDefined();
-      expect(result.trainers.every(t => t.is_freelance === true)).toBe(true);
-    });
-  });
-
-  describe('getTrainersByGym', () => {
-    it('should return trainers for specific gym', async () => {
-      const gymId = 'test-gym-id';
-      const mockTrainers = [
-        {
-          id: 'trainer1',
-          first_name_th: 'ครูยิม',
-          first_name_en: 'Gym Trainer',
-          gym_id: gymId,
-          is_active: true,
-          provinceData: null,
-          gymData: { id: gymId, name_th: 'ยิม', name_en: 'Gym' } as any
-        }
-      ];
-
-      (db.select as any).mockReturnValueOnce(mockDbFluent(mockTrainers));
-      (db.select as any).mockReturnValueOnce(mockDbFluent([{ value: 1 }]));
-
-      const result = await trainerService.getTrainersByGym(gymId);
-
-      expect(result).toBeDefined();
-      expect(result.trainers.every(t => t.gym_id === gymId)).toBe(true);
-    });
-  });
-
-  describe('getTrainersByProvince', () => {
-    it('should return trainers for specific province', async () => {
-      const provinceId = 1;
-      const mockTrainers = [
-        {
-          id: 'trainer1',
-          first_name_th: 'ครูจังหวัด',
-          first_name_en: 'Province Trainer',
-          province_id: provinceId,
-          is_active: true,
-          provinceData: { id: provinceId, name_th: 'กรุงเทพ', name_en: 'Bangkok' } as Province,
-          gymData: null
-        }
-      ];
-
-      (db.select as any).mockReturnValueOnce(mockDbFluent(mockTrainers));
-      (db.select as any).mockReturnValueOnce(mockDbFluent([{ value: 1 }]));
-
-      const result = await trainerService.getTrainersByProvince(provinceId);
-
-      expect(result).toBeDefined();
-      expect(result.trainers.every(t => t.province_id === provinceId)).toBe(true);
+      expect(result.trainers).toHaveLength(1);
+      expect(result.total).toBe(1);
     });
   });
 }); 

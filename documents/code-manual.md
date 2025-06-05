@@ -8,13 +8,14 @@ This backend is the core engine behind the MyMuayThai application, responsible f
 
 *   **Data Management**: Storing and managing information about Muay Thai gyms, trainers, classes, provinces, and users in a PostgreSQL database
 *   **API Services**: Providing RESTful API endpoints for mobile and web applications to consume data
-*   **Business Logic**: Handling complex operations like search, filtering, relationships between entities
+*   **Business Logic**: Handling complex operations like search, filtering, relationships between entities using modern functional patterns
 *   **Data Integrity**: Ensuring consistent and reliable data through proper validation and constraints
-*   **Scalability**: Built with modern tools (Bun, Fastify, Drizzle ORM) for high performance
+*   **Scalability**: Built with modern tools (Bun, Fastify, Drizzle ORM) and functional architecture for high performance
 *   **Pagination**: Advanced pagination support for efficient data loading (default 20 items per page)
 *   **Automated Database Seeding**: Comprehensive automation for setting up development, testing, and production environments
+*   **Functional Service Layer**: Modern functional programming approach for better maintainability and testability
 
-Think of it as the foundation that powers everything - when you search for gyms in Bangkok or view a trainer's profile, this backend processes those requests and delivers the data.
+Think of it as the foundation that powers everything - when you search for gyms in Bangkok or view a trainer's profile, this backend processes those requests through clean functional service layers and delivers the data.
 
 ## 2. Technology Stack
 
@@ -25,8 +26,9 @@ Think of it as the foundation that powers everything - when you search for gyms 
 *   **ORM**: Drizzle ORM (modern, type-safe database toolkit)
 *   **Documentation**: Swagger/OpenAPI 3.0 (auto-generated API docs)
 *   **Security**: Helmet, CORS (security middleware)
-*   **Testing**: Bun built-in test runner with comprehensive service layer tests
+*   **Testing**: Bun built-in test runner with comprehensive functional service layer tests
 *   **Database Management**: Automated seeding with conflict resolution and idempotent operations
+*   **Architecture**: Functional Service Layer Pattern (standalone exported functions instead of classes)
 
 ## 3. Project Structure Overview
 
@@ -42,11 +44,11 @@ mymuaythai-be/
 │   │   ├── province-seed.ts # All 76 Thai provinces seeding
 │   │   └── migrations/     # Version-controlled schema changes
 │   ├── routes/             # API endpoint definitions
-│   ├── services/           # Business logic layer
+│   ├── services/           # Functional Service Layer (Business logic functions)
 │   ├── types/              # TypeScript type definitions
 │   └── server.ts           # Main application entry point
-├── __tests__/              # Test files
-│   └── services/           # Service layer tests
+├── __tests__/              # Functional service layer tests
+│   └── services/           # Comprehensive functional testing suite
 ├── drizzle.config.ts       # Drizzle ORM configuration
 ├── package.json            # Dependencies and automated scripts
 ├── tsconfig.json           # TypeScript configuration
@@ -168,48 +170,78 @@ This directory contains all database-related code using Drizzle ORM:
     *   `PaginatedResponse<T>` - For paginated results with items, total, page, pageSize, totalPages
     *   Various specialized interfaces for complex operations
 
-### 4.4. `src/services/` - Business Logic Layer
+### 4.4. `src/services/` - Functional Service Layer (Business Logic)
 
-Contains the core business logic separated from API routing:
+**🎯 Architecture**: The service layer follows a **Functional Service Layer Pattern** using standalone exported functions instead of traditional class-based approaches.
 
-#### **`gymService.ts`** - Gym Management Logic
+**Benefits of Functional Approach:**
+*   **Better Testability**: Standalone functions are easier to mock and test
+*   **Reduced Complexity**: No class instantiation or state management 
+*   **Tree-shaking**: Better bundle optimization with unused function elimination
+*   **Functional Programming**: Encourages immutable data flow and pure functions
+*   **TypeScript Integration**: Enhanced type inference and intellisense support
+
+#### **`gymService.ts`** - Gym Management Functional Logic
+*   **Functional Architecture**: All operations are standalone exported functions
 *   **Core Operations**:
-    *   `getAllGyms()` - Paginated gym listing with search and filtering (default 10 items per page, configurable)
-    *   `getGymById()` - Single gym with full details (province, images, tags, trainers)
-    *   `createGym()`, `updateGym()`, `deleteGym()` - CRUD operations
-    *   `searchGyms()` - Full-text search across multiple fields with pagination
+    *   `export async function getAllGyms()` - Paginated gym listing with search and filtering (default 10 items per page, configurable)
+    *   `export async function getGymById()` - Single gym with full details (province, images, tags, trainers)
+    *   `export async function createGym()`, `updateGym()`, `deleteGym()` - CRUD operations
+    *   `export async function searchGyms()` - Full-text search across multiple fields with pagination
 *   **Image Management**:
-    *   `addGymImage()`, `removeGymImage()` - Image CRUD
-    *   `getGymImages()` - Retrieve all images for a gym
+    *   `export async function addGymImage()`, `removeGymImage()` - Image CRUD
+    *   `export async function getGymImages()` - Retrieve all images for a gym
 *   **Filtering**:
-    *   `getGymsByProvince()` - Location-based filtering
+    *   `export async function getGymsByProvince()` - Location-based filtering
+*   **Helper Functions**:
+    *   `function mapRawGymToGymWithDetails()` - Standalone helper for data transformation
 *   **Advanced Features**:
     *   Pagination support with total count calculation
     *   Multi-field search (Thai/English names, descriptions, province data)
     *   Soft deletes (marks as inactive rather than deleting)
     *   Complex joins for related data using Drizzle ORM
 
-#### **`trainerService.ts`** - Trainer Management Logic (Fully Converted to Drizzle ORM)
-*   **Comprehensive Drizzle Implementation**: Completely converted from raw SQL to Drizzle ORM
+#### **`trainerService.ts`** - Trainer Management Functional Logic
+*   **Fully Functional Implementation**: Completely converted from class-based to standalone function approach
 *   **Core Operations**:
-    *   `getAllTrainers()` - Advanced paginated listing with multiple filter options (default 20 items per page)
-    *   `getTrainerById()` - Single trainer with full details and relationships
-    *   `createTrainer()`, `updateTrainer()`, `deleteTrainer()` - Complete CRUD operations
-    *   `searchTrainers()` - Full-text search across names, bio, province, and gym data
+    *   `export async function getAllTrainers()` - Advanced paginated listing with multiple filter options (default 20 items per page)
+    *   `export async function getTrainerById()` - Single trainer with full details and relationships
+    *   `export async function createTrainer()`, `updateTrainer()`, `deleteTrainer()` - Complete CRUD operations
+    *   `export async function searchTrainers()` - Full-text search across names, bio, province, and gym data
 *   **Relationship Management**:
-    *   `addTrainerClass()`, `removeTrainerClass()` - Trainer-class associations
-    *   `getTrainerClasses()` - Retrieve trainer's assigned classes
+    *   `export async function addTrainerClass()`, `removeTrainerClass()` - Trainer-class associations
+    *   `export async function getTrainerClasses()` - Retrieve trainer's assigned classes
 *   **Advanced Filtering**:
-    *   `getTrainersByGym()` - Filter by gym with pagination
-    *   `getTrainersByProvince()` - Filter by province with pagination
-    *   `getFreelanceTrainers()` - Filter freelance trainers with pagination
+    *   `export async function getTrainersByGym()` - Filter by gym with pagination
+    *   `export async function getTrainersByProvince()` - Filter by province with pagination
+    *   `export async function getFreelanceTrainers()` - Filter freelance trainers with pagination
+*   **Helper Functions**:
+    *   `function mapRawTrainerToTrainerWithDetails()` - Standalone helper for data transformation
 *   **Query Features**:
     *   Complex multi-table searches including province and gym data
     *   Support for multiple simultaneous filters (search + province + gym + freelance status)
     *   Proper handling of nullable relationships (freelance trainers)
     *   Type-safe operations with `TrainerWithDetails` response mapping
 
-#### **`provinceService.ts`** - Province Management Logic (Read-Only)
+#### **`tagService.ts`** - Tag Management Functional Logic
+*   **Complete Functional Implementation**: All operations as standalone exported functions
+*   **Core Operations**:
+    *   `export async function getAllTags()` - Paginated tag listing with optional statistics
+    *   `export async function getTagById()` - Single tag lookup
+    *   `export async function createTag()`, `updateTag()`, `deleteTag()` - Complete CRUD operations
+    *   `export async function searchTags()` - Full-text search across Thai and English names
+*   **Advanced Features**:
+    *   `export async function getTagUsageStats()` - Get usage statistics for tags
+    *   `export async function getAllTagsWithStats()` - All tags with usage counts
+*   **Conflict Resolution**:
+    *   Smart delete validation (prevents deletion of tags in use)
+    *   Usage count validation before deletion operations
+*   **Search Capabilities**:
+    *   Bilingual search support (Thai/English)
+    *   Pagination with total count calculation
+
+#### **`provinceService.ts`** - Province Management Logic (Legacy Class-based)
+*   **Legacy Architecture**: Maintained as class-based for compatibility (read-only service)
 *   **Core Operations**:
     *   `getAllProvinces()` - All provinces sorted by English name
     *   `getAllProvincesThaiSort()` - All provinces sorted by Thai name
@@ -225,9 +257,15 @@ Contains the core business logic separated from API routing:
 
 ### 4.5. `src/routes/` - API Endpoint Definitions
 
-Defines the HTTP API interface using Fastify:
+Defines the HTTP API interface using Fastify with **functional service integration**:
 
 #### **`gyms.ts`** - Gym API Endpoints
+*   **Functional Service Integration**: 
+    ```typescript
+    import * as gymService from '../services/gymService';
+    // Direct function calls - no class instantiation
+    const gyms = await gymService.getAllGyms(page, pageSize, searchTerm, provinceId);
+    ```
 *   **GET Routes**:
     *   `/api/gyms` - List all gyms (with pagination, search, filtering)
     *   `/api/gyms/:id` - Get specific gym with full details
@@ -244,6 +282,12 @@ Defines the HTTP API interface using Fastify:
     *   `/api/gyms/images/:imageId` - Remove gym image
 
 #### **`trainers.ts`** - Trainer API Endpoints
+*   **Functional Service Integration**:
+    ```typescript
+    import * as trainerService from '../services/trainerService';
+    // All operations use direct function calls
+    const trainers = await trainerService.getAllTrainers(page, pageSize, searchTerm, provinceId, gymId, isFreelance);
+    ```
 *   **GET Routes**:
     *   `/api/trainers` - List all trainers with advanced filtering and pagination
     *   `/api/trainers/:id` - Get specific trainer with full details
@@ -261,17 +305,29 @@ Defines the HTTP API interface using Fastify:
     *   `/api/trainers/:id` - Soft delete trainer
     *   `/api/trainers/:id/classes/:classId` - Remove class from trainer
 
-#### **`provinces.ts`** - Province API Endpoints (Read-Only)
+#### **`tags.ts`** - Tag API Endpoints
+*   **Functional Service Integration**:
+    ```typescript
+    import * as tagService from '../services/tagService';
+    // Clean functional calls throughout
+    const tags = await tagService.getAllTags(page, pageSize);
+    const stats = await tagService.getTagUsageStats(id);
+    ```
 *   **GET Routes**:
-    *   `/api/provinces` - List all provinces with sorting and filtering options
-    *   `/api/provinces/:id` - Get specific province by ID
-    *   `/api/provinces/search/:query` - Search provinces by name (Thai/English)
-    *   `/api/provinces/region/:region` - Get provinces by geographical region
-    *   `/api/provinces/stats` - Get province statistics and gym counts
-*   **Query Parameters**:
-    *   `?sort=en|th` - Sort by English (default) or Thai name
-    *   `?region=central|eastern|northern|northeastern|southern|western` - Filter by region
-    *   `?stats=true` - Include gym count statistics
+    *   `/api/tags` - List all tags with pagination and optional usage statistics
+    *   `/api/tags/:id` - Get specific tag by ID
+    *   `/api/tags/search/:query` - Search tags by name (Thai/English)
+    *   `/api/tags/:id/stats` - Get tag usage statistics
+*   **POST Routes**:
+    *   `/api/tags` - Create new tag
+*   **PUT Routes**:
+    *   `/api/tags/:id` - Update tag details
+*   **DELETE Routes**:
+    *   `/api/tags/:id` - Delete tag (with usage validation)
+
+#### **`provinces.ts`** - Province API Endpoints (Class-based Legacy)
+*   **Legacy Integration**: Still uses class-based service for compatibility
+*   **GET Routes**: Read-only endpoints for provinces
 *   **No CRUD Operations**: Read-only endpoints for data integrity
 
 **Response Format**: All endpoints return standardized `ApiResponse<T>` objects with:
@@ -376,24 +432,38 @@ bun run db:fresh
 
 ## 7. Testing Infrastructure
 
-### Comprehensive Test Coverage
-*   **Test Framework**: Bun built-in test runner
+### Comprehensive Functional Test Coverage
+*   **Test Framework**: Bun built-in test runner with functional testing approach
 *   **Test Location**: `__tests__/services/` directory
+*   **Architecture**: All tests follow functional testing patterns instead of class-based testing
 *   **Coverage Areas**:
-    *   **GymService Tests**: Complete CRUD operations, pagination, search, filtering, image management
-    *   **TrainerService Tests**: Full trainer lifecycle, class assignments, freelance filtering, advanced search with pagination
+    *   **GymService Functions**: Complete CRUD operations, pagination, search, filtering, image management
+    *   **TrainerService Functions**: Full trainer lifecycle, class assignments, freelance filtering, advanced search with pagination
+    *   **TagService Functions**: Tag management, usage statistics, search functionality with conflict resolution
 
-### Test Features
-*   **Database Setup**: Each test suite creates and cleans up test data
+### Functional Testing Features
+*   **Direct Function Testing**: Tests import and call standalone functions directly
+    ```typescript
+    import * as gymService from '../../src/services/gymService';
+    const result = await gymService.getAllGyms(1, 10);
+    ```
+*   **Database Mocking**: Sophisticated Drizzle ORM mocking with fluent query builder simulation
+*   **Type Safety Testing**: Comprehensive TypeScript type compatibility validation
 *   **Relationship Testing**: Tests many-to-many relationships (trainer-classes, gym-tags)
 *   **Pagination Testing**: Validates pagination logic and total counts
 *   **Error Handling**: Tests edge cases and error conditions
 *   **Foreign Key Testing**: Validates referential integrity
 
+### Test Architecture Benefits
+*   **No Class Instantiation**: Tests run directly against functions, simplifying setup
+*   **Better Isolation**: Each function can be tested independently
+*   **Improved Mocking**: Easier to mock individual functions rather than entire class instances
+*   **Enhanced Type Checking**: Better TypeScript integration with functional testing
+
 ### Running Tests
 ```bash
-bun test                              # Run all tests
-bun test __tests__/services/          # Run service tests
+bun test                              # Run all functional tests
+bun test __tests__/services/          # Run service function tests
 bun test --watch                      # Watch mode for development
 ```
 
@@ -454,6 +524,11 @@ The MyMuayThai backend includes a sophisticated database seeding system designed
 
 ## 9. Key Concepts for Non-Backend Developers
 
+*   **Functional Service Layer**: Instead of classes, we use standalone functions that can be imported and called directly, making code more modular and testable
+*   **Standalone Functions**: Business logic operations that don't require class instantiation or state management
+*   **Import Pattern**: Services are imported as `import * as serviceName` and functions called as `serviceName.functionName()`
+*   **Tree-shaking**: Build optimization that removes unused functions from the final bundle
+*   **Pure Functions**: Functions that don't have side effects and return predictable outputs for given inputs
 *   **ORM (Object-Relational Mapping)**: Drizzle ORM translates TypeScript code to SQL, providing type safety and easier database operations
 *   **RESTful API**: Standard HTTP methods (GET, POST, PUT, DELETE) for different operations
 *   **Type Safety**: TypeScript ensures data consistency between database, API, and client applications
@@ -487,15 +562,46 @@ The system automatically generates comprehensive API documentation using Swagger
 
 ## 12. Future Extensibility
 
-The architecture is designed for easy extension:
+The functional architecture is designed for easy extension:
 
-*   **Authentication**: Can easily add JWT-based auth with role-based permissions
-*   **File Uploads**: Infrastructure ready for image upload services
-*   **Caching**: Can add Redis for performance optimization
-*   **Real-time Features**: WebSocket support for live updates
-*   **Multi-tenancy**: Database design supports multiple organizations
-*   **Mobile API**: RESTful design compatible with mobile app development
-*   **Advanced Analytics**: Reporting and analytics capabilities
-*   **Automated Deployment**: Seeding scripts ready for CI/CD integration
+*   **Authentication**: Can easily add JWT-based auth with functional middleware patterns
+*   **File Uploads**: Infrastructure ready for functional image upload services
+*   **Caching**: Can add Redis with functional caching patterns
+*   **Real-time Features**: WebSocket support using functional event handlers
+*   **Multi-tenancy**: Database design supports multiple organizations with functional tenant isolation
+*   **Mobile API**: RESTful functional design compatible with mobile app development
+*   **Advanced Analytics**: Functional reporting and analytics capabilities
+*   **Automated Deployment**: Functional seeding scripts ready for CI/CD integration
+*   **Service Expansion**: Easy to add new functional services following the established pattern
+*   **Microservices**: Functional approach makes it easier to extract services into microservices if needed
 
-This manual provides a complete overview of the MyMuayThai backend architecture. The system is built with modern best practices, comprehensive automation, type safety, and scalability in mind, making it maintainable and extensible for future growth. The enhanced seeding system ensures that developers can quickly set up any environment configuration, from minimal development setups to full-featured demo environments. 
+### Migration from Class-based to Functional Pattern
+
+**For Future Development:**
+*   **New Services**: Always use functional service layer pattern with standalone exported functions
+*   **Legacy Services**: Gradually migrate remaining class-based services (like provinceService) to functional pattern
+*   **Testing**: Adopt functional testing approach for all new test suites
+*   **Documentation**: Update API documentation to reflect functional patterns
+
+**Functional Pattern Template:**
+```typescript
+// ✅ Recommended functional service structure
+export async function getAllItems(page: number, pageSize: number): Promise<{items: Item[], total: number}> {
+  // Implementation
+}
+
+export async function getItemById(id: string): Promise<Item | null> {
+  // Implementation
+}
+
+export async function createItem(data: CreateItemRequest): Promise<Item> {
+  // Implementation
+}
+
+// Helper functions (not exported)
+function mapRawItemToItemWithDetails(rawItem: any): ItemWithDetails {
+  // Implementation
+}
+```
+
+This manual provides a complete overview of the MyMuayThai backend architecture with its modern **Functional Service Layer Pattern**. The system is built with contemporary best practices, comprehensive automation, type safety, and scalability in mind, making it maintainable and extensible for future growth. The enhanced functional architecture ensures that developers can work with clean, testable, and modular code while maintaining high performance and reliability. 

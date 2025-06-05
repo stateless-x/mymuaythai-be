@@ -1,8 +1,6 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { TrainerService } from '../services/trainerService';
+import * as trainerService from '../services/trainerService';
 import { CreateTrainerRequest, ApiResponse, PaginatedResponse, TrainerWithDetails } from '../types';
-
-const trainerService = new TrainerService();
 
 export async function trainerRoutes(fastify: FastifyInstance) {
   // Get all trainers with pagination
@@ -232,7 +230,7 @@ export async function trainerRoutes(fastify: FastifyInstance) {
           pageSize,
           totalPages
         },
-        message: 'Search results retrieved successfully'
+        message: 'Trainers search completed successfully'
       };
       return reply.code(200).send(response);
     } catch (error) {
@@ -266,11 +264,15 @@ export async function trainerRoutes(fastify: FastifyInstance) {
   });
 
   // Update trainer
-  fastify.put('/trainers/:id', async (request: FastifyRequest<{ Params: { id: string }; Body: Partial<CreateTrainerRequest> }>, reply: FastifyReply) => {
+  fastify.put('/trainers/:id', async (request: FastifyRequest<{ 
+    Params: { id: string };
+    Body: Partial<CreateTrainerRequest>;
+  }>, reply: FastifyReply) => {
     try {
       const { id } = request.params;
-      const trainerData = request.body;
-      const trainer = await trainerService.updateTrainer(id, trainerData);
+      const updateData = request.body;
+      
+      const trainer = await trainerService.updateTrainer(id, updateData);
       
       if (!trainer) {
         const response: ApiResponse<null> = {
@@ -324,16 +326,20 @@ export async function trainerRoutes(fastify: FastifyInstance) {
   });
 
   // Add class to trainer
-  fastify.post('/trainers/:id/classes', async (request: FastifyRequest<{ Params: { id: string }; Body: { class_id: string } }>, reply: FastifyReply) => {
+  fastify.post('/trainers/:id/classes', async (request: FastifyRequest<{ 
+    Params: { id: string };
+    Body: { class_id: string };
+  }>, reply: FastifyReply) => {
     try {
       const { id } = request.params;
       const { class_id } = request.body;
-      const added = await trainerService.addTrainerClass(id, class_id);
       
-      if (!added) {
+      const success = await trainerService.addTrainerClass(id, class_id);
+      
+      if (!success) {
         const response: ApiResponse<null> = {
           success: false,
-          error: 'Failed to add class or class already assigned'
+          error: 'Failed to add class to trainer'
         };
         return reply.code(400).send(response);
       }
@@ -353,17 +359,20 @@ export async function trainerRoutes(fastify: FastifyInstance) {
   });
 
   // Remove class from trainer
-  fastify.delete('/trainers/:id/classes/:classId', async (request: FastifyRequest<{ Params: { id: string; classId: string } }>, reply: FastifyReply) => {
+  fastify.delete('/trainers/:id/classes/:classId', async (request: FastifyRequest<{ 
+    Params: { id: string; classId: string };
+  }>, reply: FastifyReply) => {
     try {
       const { id, classId } = request.params;
-      const removed = await trainerService.removeTrainerClass(id, classId);
       
-      if (!removed) {
+      const success = await trainerService.removeTrainerClass(id, classId);
+      
+      if (!success) {
         const response: ApiResponse<null> = {
           success: false,
-          error: 'Class assignment not found'
+          error: 'Failed to remove class from trainer'
         };
-        return reply.code(404).send(response);
+        return reply.code(400).send(response);
       }
 
       const response: ApiResponse<null> = {

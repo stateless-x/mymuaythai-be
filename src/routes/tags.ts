@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { tagService } from '../services/tagService';
+import * as tagService from '../services/tagService';
 import { ApiResponse, PaginatedResponse, Tag, NewTag } from '../types';
 
 export async function tagRoutes(fastify: FastifyInstance) {
@@ -209,16 +209,8 @@ export async function tagRoutes(fastify: FastifyInstance) {
   fastify.delete('/tags/:id', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     try {
       const { id } = request.params;
-      const deleted = await tagService.deleteTag(id);
+      await tagService.deleteTag(id);
       
-      if (!deleted) {
-        const response: ApiResponse<null> = {
-          success: false,
-          error: 'Tag not found'
-        };
-        return reply.code(404).send(response);
-      }
-
       const response: ApiResponse<null> = {
         success: true,
         message: 'Tag deleted successfully'
@@ -226,12 +218,21 @@ export async function tagRoutes(fastify: FastifyInstance) {
       return reply.code(200).send(response);
     } catch (error) {
       console.error('Error deleting tag:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Failed to delete tag';
+      
+      // Check if it's a usage constraint error
+      if (error instanceof Error && error.message.includes('currently used by')) {
+        const response: ApiResponse<null> = {
+          success: false,
+          error: error.message
+        };
+        return reply.code(409).send(response); // Conflict status code
+      }
+      
       const response: ApiResponse<null> = {
         success: false,
-        error: errorMessage
+        error: 'Failed to delete tag'
       };
-      return reply.code(error instanceof Error && error.message.includes('currently used') ? 400 : 500).send(response);
+      return reply.code(500).send(response);
     }
   });
 } 

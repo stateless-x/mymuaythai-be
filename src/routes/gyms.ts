@@ -1,5 +1,5 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { GymService } from '../services/gymService';
+import * as gymService from '../services/gymService';
 import { createGymSchema, updateGymSchema, gymQuerySchema, formatZodError } from '../utils/validation';
 import { ValidationError, NotFoundError } from '../utils/database';
 import { UpdateGymRequest } from '../types';
@@ -17,8 +17,6 @@ interface ApiResponse<T> {
     totalPages: number;
   };
 }
-
-const gymService = new GymService();
 
 export async function gymRoutes(fastify: FastifyInstance) {
   // Get all gyms with pagination and filtering
