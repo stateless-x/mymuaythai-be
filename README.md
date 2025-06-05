@@ -4,30 +4,23 @@ A comprehensive backend platform for managing Muay Thai gyms and trainers in Tha
 
 ## 🥊 Features
 
-- **Gym Management**: Complete CRUD operations for Muay Thai gyms with images, tags, and location data
-- **Trainer Management**: Manage trainers (both gym-affiliated and freelance) with class assignments and specializations
-- **Province-based Location**: Thai province support with bilingual content (Thai/English)
-- **Multi-language Support**: Full bilingual content throughout the platform
-- **Advanced Search**: Full-text search across gyms and trainers with filtering capabilities
-- **Class & Tag System**: Flexible categorization with many-to-many relationships
-- **RESTful API**: Clean, well-documented API endpoints with OpenAPI 3.0 specification
-- **Type Safety**: Full TypeScript implementation with Drizzle ORM type inference
-- **Database Migrations**: Automated schema management with Drizzle Kit
-- **Sample Data**: Comprehensive seeding system for development and testing
-- **Pagination**: Advanced pagination support for all major endpoints (20 items per page default)
-- **Functional Service Layer**: Modern functional programming approach avoiding classes for better maintainability
+- **Gym & Trainer Management**: Complete CRUD operations with images, tags, and location data
+- **Province-based Location**: Thai province support with bilingual content
+- **Advanced Search & Categorization**: Full-text search and flexible categorization
+- **RESTful API**: Clean, well-documented API endpoints
+- **Type Safety & Migrations**: Full TypeScript implementation and automated schema management
+- **Functional Service Layer**: Modern functional programming approach
 
 ## 🛠️ Tech Stack
 
-- **Runtime**: [Bun](https://bun.sh/) (v1.2+) - Fast JavaScript runtime and package manager
-- **Language**: TypeScript - Type-safe development
-- **Framework**: [Fastify](https://www.fastify.io/) - High-performance web framework
-- **Database**: PostgreSQL (v13+) - Robust relational database
-- **ORM**: [Drizzle ORM](https://orm.drizzle.team/) - Modern, type-safe database toolkit
-- **Documentation**: Swagger/OpenAPI 3.0 - Auto-generated interactive API docs
-- **Security**: Helmet, CORS - Security middleware and protection
-- **Testing**: Bun built-in test runner with comprehensive functional service layer tests
-- **Architecture**: Functional Service Layer Pattern - Clean, testable, and maintainable code structure
+- **Runtime**: [Bun](https://bun.sh/) (v1.2+)
+- **Language**: TypeScript
+- **Framework**: [Fastify](https://www.fastify.io/)
+- **Database**: PostgreSQL (v13+)
+- **ORM**: [Drizzle ORM](https://orm.drizzle.team/)
+- **Documentation**: Swagger/OpenAPI 3.0
+- **Security**: Helmet, CORS
+- **Testing**: Bun built-in test runner
 
 ## 📋 Prerequisites
 
@@ -37,243 +30,68 @@ A comprehensive backend platform for managing Muay Thai gyms and trainers in Tha
 
 ## 🚀 Quick Start
 
-### 1. Clone the Repository
+1. **Clone the Repository**
+   ```bash
+   git clone <repository-url>
+   cd mymuaythai-be
+   ```
 
-```bash
-git clone <repository-url>
-cd mymuaythai-be
-```
+2. **Install Dependencies**
+   ```bash
+   bun install
+   ```
 
-### 2. Install Dependencies
+3. **Database Setup**
+   ```sql
+   CREATE DATABASE mymuaythai;
+   CREATE USER admin WITH PASSWORD 'admin';
+   GRANT ALL PRIVILEGES ON DATABASE mymuaythai TO admin;
+   ```
 
-```bash
-bun install
-```
+4. **Environment Configuration**
+   ```bash
+   cp env.example .env
+   ```
+   Update `.env` with your database credentials.
 
-### 3. Database Setup
+5. **Database Migration & Seeding**
+   ```bash
+   bun run db:migrate
+   bun run db:seed
+   ```
 
-Create a PostgreSQL database:
-
-```sql
-CREATE DATABASE mymuaythai;
-CREATE USER admin WITH PASSWORD 'admin';
-GRANT ALL PRIVILEGES ON DATABASE mymuaythai TO admin;
-```
-
-### 4. Environment Configuration
-
-Create environment file from example:
-
-```bash
-cp env.example .env
-```
-
-Update `.env` with your database credentials:
-
-```env
-# Database Configuration
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=mymuaythai
-DB_USER=admin
-DB_PASSWORD=admin
-
-# Server Configuration
-PORT=3000
-HOST=0.0.0.0
-NODE_ENV=development
-
-# API Configuration
-API_VERSION=1.0.0
-API_TITLE="MyMuayThai API"
-API_DESCRIPTION="API for managing Muay Thai gyms and trainers"
-```
-
-### 5. Database Migration & Seeding
-
-Run migrations and populate with sample data:
-
-```bash
-# Generate migration files (if schema changed)
-bun run db:generate
-
-# Apply migrations to database
-bun run db:migrate
-
-# Populate with sample data (5 provinces, 2 gyms, 2 trainers, classes, tags)
-bun run db:seed
-
-# Or seed all 77 Thai provinces for production
-bun run db:seed:provinces
-```
-
-### 6. Start Development Server
-
-```bash
-bun run dev
-```
-
-The server will start at: **http://localhost:3000**
+6. **Start Development Server**
+   ```bash
+   bun run dev
+   ```
+   The server will start at: **http://localhost:4000**
 
 ## 📚 API Documentation
 
-Once the server is running, access:
-
-- **Swagger UI**: http://localhost:3000/docs - Interactive API documentation
-- **Health Check**: http://localhost:3000/health - Server status endpoint
-
-## 🗄️ Database Schema
-
-The platform uses a well-structured relational database with:
-
-### Core Tables
-
-- **users**: User accounts with role-based access
-- **provinces**: Thai provinces with bilingual names
-- **gyms**: Muay Thai training facilities with complete details
-- **trainers**: Individual trainers (gym-affiliated or freelance)
-- **classes**: Training class types and descriptions
-- **tags**: Flexible categorization labels
-
-### Junction Tables
-
-- **gym_images**: Gym photo galleries
-- **trainer_classes**: Trainer-class assignments (many-to-many)
-- **gym_tags**: Gym categorization (many-to-many)
-- **trainer_tags**: Trainer specializations (many-to-many)
-
-### Key Features
-
-- **UUID Primary Keys**: All entities use UUID for better distribution
-- **Bilingual Support**: Thai and English fields throughout
-- **Soft Deletes**: `is_active` flags preserve data integrity
-- **Foreign Key Constraints**: Proper referential integrity
-- **Timestamps**: Creation tracking for auditing
-
-## �� API Endpoints
-
-### Functional Service Integration
-
-All API endpoints now integrate with **functional service layer** for improved maintainability:
-
-```typescript
-// Route integration example
-import * as gymService from '../services/gymService';
-
-// Direct function calls - no class instantiation needed
-const gyms = await gymService.getAllGyms(page, pageSize, searchTerm, provinceId);
-const gym = await gymService.getGymById(id);
-```
-
-### Gyms
-
-- `GET /api/gyms` - List all gyms with pagination, search, and filtering
-- `GET /api/gyms/:id` - Get specific gym with full details
-- `GET /api/gyms/:id/images` - Get gym images
-- `GET /api/gyms/province/:provinceId` - Get gyms by province
-- `GET /api/gyms/search/:query` - Search gyms by name/description with pagination
-- `POST /api/gyms` - Create new gym
-- `PUT /api/gyms/:id` - Update gym details
-- `DELETE /api/gyms/:id` - Soft delete gym
-- `POST /api/gyms/:id/images` - Add gym image
-- `DELETE /api/gyms/images/:imageId` - Remove gym image
-
-### Trainers
-
-- `GET /api/trainers` - List all trainers with pagination and advanced filtering
-- `GET /api/trainers/:id` - Get specific trainer with full details (includes province, gym, classes, tags)
-- `GET /api/trainers/gym/:gymId` - Get trainers by gym with pagination
-- `GET /api/trainers/province/:provinceId` - Get trainers by province with pagination
-- `GET /api/trainers/freelance` - Get freelance trainers with pagination
-- `GET /api/trainers/:id/classes` - Get trainer's classes
-- `GET /api/trainers/search/:query` - Search trainers with pagination
-- `POST /api/trainers` - Create new trainer
-- `PUT /api/trainers/:id` - Update trainer details
-- `DELETE /api/trainers/:id` - Soft delete trainer
-- `POST /api/trainers/:id/classes` - Add class to trainer
-- `DELETE /api/trainers/:id/classes/:classId` - Remove class from trainer
-
-### Tags
-
-- `GET /api/tags` - List all tags with pagination and optional usage statistics
-- `GET /api/tags/:id` - Get specific tag by ID
-- `GET /api/tags/search/:query` - Search tags by name (Thai/English)
-- `GET /api/tags/:id/stats` - Get tag usage statistics
-- `POST /api/tags` - Create new tag
-- `PUT /api/tags/:id` - Update tag details
-- `DELETE /api/tags/:id` - Delete tag (with usage validation)
+- **Swagger UI**: http://localhost:4000/docs
+- **Health Check**: http://localhost:4000/health
 
 ## 🧪 Testing
 
-The project includes comprehensive test coverage using Bun's built-in test runner with a modern functional testing approach:
-
+Run all tests:
 ```bash
-# Run all tests
 bun test
-
-# Run specific test files
-bun test __tests__/services/gymService.test.ts
-bun test __tests__/services/trainerService.test.ts
-bun test __tests__/services/tagService.test.ts
-
-# Run tests with watch mode
-bun test --watch
 ```
 
-### Test Coverage & Architecture
-- **Functional Service Testing**: All service tests use functional approach, testing standalone exported functions
-- **GymService Functions**: Complete CRUD operations, pagination, search, filtering, image management
-- **TrainerService Functions**: Full trainer lifecycle, class assignments, freelance filtering, advanced search
-- **TagService Functions**: Tag management, usage statistics, search functionality with conflict resolution
-- **Type Safety**: Comprehensive TypeScript type compatibility testing
-- **Database Mocking**: Sophisticated Drizzle ORM mocking with fluent query builder simulation
+## 🔧 Configuration
 
-### Service Layer Architecture
-The services follow a **Functional Service Layer Pattern** instead of traditional class-based approaches:
+### Environment Variables
 
-```typescript
-// ✅ Modern Functional Approach (Current)
-import * as gymService from '../services/gymService';
-const gym = await gymService.getGymById(id);
-const gyms = await gymService.getAllGyms(page, pageSize);
-
-// ❌ Old Class-based Approach (Deprecated)
-// const gymService = new GymService();
-// const gym = await gymService.getGymById(id);
-```
-
-**Benefits of Functional Approach:**
-- **Better Testability**: Standalone functions are easier to mock and test
-- **Reduced Complexity**: No class instantiation or state management
-- **Tree-shaking**: Better bundle optimization with unused function elimination
-- **Functional Programming**: Encourages immutable data flow and pure functions
-- **TypeScript Integration**: Enhanced type inference and intellisense support
-
-## 📦 Available Scripts
-
-```bash
-# Development
-bun run dev          # Start development server with hot reload
-bun run build        # Build for production
-bun run start        # Start production server
-
-# Code Quality
-bun run lint         # Run ESLint
-bun run format       # Format code with Prettier
-
-# Database Operations
-bun run db:generate  # Generate new migrations from schema changes
-bun run db:migrate   # Apply pending migrations to database
-bun run db:seed      # Populate database with sample data (5 provinces, 2 gyms, 2 trainers, classes, tags)
-bun run db:seed:provinces  # Seed all 77 Thai provinces
-bun run db:seed:dev  # Seed essential data for development (provinces, users, classes, tags only)
-bun run db:cleanup   # Clean up all data from database (for production deployment)
-bun run db:studio    # Open Drizzle Studio (visual database browser)
-
-# Testing
-bun test            # Run all tests
-bun test --watch    # Run tests in watch mode
-```
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DB_HOST` | Database host | `localhost` |
+| `DB_PORT` | Database port | `5432` |
+| `DB_NAME` | Database name | `mymuaythai` |
+| `DB_USER` | Database user | `admin` |
+| `DB_PASSWORD` | Database password | `admin` |
+| `PORT` | Server port | `4000` |
+| `HOST` | Server host | `0.0.0.0` |
+| `NODE_ENV` | Environment | `development` |
 
 ## 🏗️ Project Structure
 
@@ -312,80 +130,41 @@ tsconfig.json                 # TypeScript configuration
 env.example                   # Environment variables template
 ```
 
-## 🔧 Configuration
-
-### Environment Variables
-
-| Variable | Description | Default | Required |
-|----------|-------------|---------|----------|
-| `DB_HOST` | Database host | `localhost` | ✅ |
-| `DB_PORT` | Database port | `5432` | ✅ |
-| `DB_NAME` | Database name | `mymuaythai` | ✅ |
-| `DB_USER` | Database user | `admin` | ✅ |
-| `DB_PASSWORD` | Database password | `admin` | ✅ |
-| `PORT` | Server port | `3000` | ❌ |
-| `HOST` | Server host | `0.0.0.0` | ❌ |
-| `NODE_ENV` | Environment | `development` | ❌ |
-
-## 🗺️ Sample Data
-
-The seeding script includes comprehensive sample data:
-
-- **5 Sample Provinces**: Bangkok, Chiang Mai, Phuket, Chon Buri, Surat Thani for testing
-- **77 Thai Provinces**: All provinces of Thailand with accurate Thai and English names (via province-seed)
-- **2 Users**: Admin and regular user accounts  
-- **4 Class Types**: Basic Muay Thai, Advanced, Kids classes, Cardio Muay Thai
-- **5 Tags**: Beginner Friendly, For Professionals, Good Atmosphere, Fully Equipped, English Speaking
-- **2 Gyms**: Yodmuay Gym Bangkok & Lanna Muay Thai Chiang Mai (with images and complete details)
-- **2 Trainers**: Kru Yod (gym-affiliated) & Kru Kaew (freelance) with class assignments and specializations
-- **Relationships**: All many-to-many relationships properly connected
-
-### Province Data Organization
-
-The 77 provinces are organized into 6 geographical regions:
-- **Central Region**: 23 provinces (including Bangkok)
-- **Eastern Region**: 7 provinces 
-- **Northern Region**: 9 provinces
-- **Northeastern Region**: 20 provinces
-- **Southern Region**: 15 provinces  
-- **Western Region**: 2 provinces
-
 ## 🔒 Security Features
 
 - **CORS**: Configurable cross-origin resource sharing
-- **Helmet**: Security headers middleware (CSP, XSS protection, etc.)
-- **Input Validation**: Type-safe request validation with TypeScript
-- **SQL Injection Protection**: Parameterized queries via Drizzle ORM
+- **Helmet**: Security headers middleware
+- **Input Validation**: Type-safe request validation
+- **SQL Injection Protection**: Parameterized queries
 - **Soft Deletes**: Data preservation with active flags
 - **Environment Variables**: Sensitive configuration kept outside codebase
 
 ## 🎯 Development Features
 
-- **Hot Reload**: Development server with automatic restart on file changes
-- **Type Safety**: Full TypeScript coverage with Drizzle ORM type inference
-- **Auto-generated Types**: Database schema types automatically inferred
-- **API Documentation**: Interactive Swagger UI with live testing
+- **Hot Reload**: Development server with automatic restart
+- **Type Safety**: Full TypeScript coverage
+- **API Documentation**: Interactive Swagger UI
 - **Database GUI**: Drizzle Studio for visual database management
-- **Structured Logging**: Beautiful console output with pino-pretty
-- **Error Handling**: Comprehensive error handling with proper HTTP status codes
+- **Structured Logging**: Beautiful console output
+- **Error Handling**: Comprehensive error handling
 - **Comprehensive Testing**: Bun test runner with functional service layer coverage
-- **Functional Architecture**: Modern service layer pattern for better maintainability and testability
+- **Functional Architecture**: Modern service layer pattern
 
 ## 🚀 Future Enhancements
 
 Planned features and improvements:
 
-- [ ] **Authentication & Authorization**: JWT-based auth with role-based permissions
-- [ ] **File Upload Service**: Image upload with cloud storage integration
-- [ ] **Booking System**: Training session reservation functionality
-- [ ] **Rating & Reviews**: User feedback system for gyms and trainers
-- [ ] **Real-time Features**: WebSocket support for live updates
-- [ ] **Caching Layer**: Redis integration for improved performance
-- [ ] **Admin Dashboard**: Web-based administration interface
-- [ ] **Mobile API Extensions**: Additional endpoints for mobile app features
+- [ ] **Authentication & Authorization**: JWT-based auth
+- [ ] **File Upload Service**: Image upload
+- [ ] **Booking System**: Training session reservation
+- [ ] **Rating & Reviews**: User feedback system
+- [ ] **Real-time Features**: WebSocket support
+- [ ] **Caching Layer**: Redis integration
+- [ ] **Admin Dashboard**: Web-based administration
+- [ ] **Mobile API Extensions**: Additional endpoints
 - [ ] **Multi-tenant Support**: Support for multiple gym chains
 - [ ] **Advanced Analytics**: Reporting and analytics dashboard
-- [ ] **Service Layer Expansion**: Continue functional pattern adoption across all services
+- [ ] **Service Layer Expansion**: Continue functional pattern adoption
 
 ## 🤝 Contributing
 
@@ -397,13 +176,13 @@ Planned features and improvements:
 
 ### Development Guidelines
 
-- Follow TypeScript best practices and maintain type safety
+- Follow TypeScript best practices
 - Use Drizzle ORM for all database operations
-- **Adopt Functional Service Layer Pattern**: Use standalone exported functions instead of classes
-- Write comprehensive tests for new features using functional testing approach
+- **Adopt Functional Service Layer Pattern**
+- Write comprehensive tests for new features
 - Update API documentation for new endpoints
-- Follow the existing code structure and naming conventions
-- Prefer functional programming patterns and immutable data flow
+- Follow the existing code structure
+- Prefer functional programming patterns
 
 ## 📄 License
 
@@ -411,11 +190,11 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🙏 Acknowledgments
 
-- Built with [Bun](https://bun.sh/) - The fast all-in-one JavaScript runtime
-- [Fastify](https://www.fastify.io/) - Fast and low overhead web framework
-- [Drizzle ORM](https://orm.drizzle.team/) - Modern TypeScript ORM
-- [PostgreSQL](https://postgresql.org/) - The world's most advanced open source database
-- Thai Muay Thai community for inspiration and cultural authenticity
+- Built with [Bun](https://bun.sh/)
+- [Fastify](https://www.fastify.io/)
+- [Drizzle ORM](https://orm.drizzle.team/)
+- [PostgreSQL](https://postgresql.org/)
+- Thai Muay Thai community for inspiration
 
 ---
 
@@ -423,27 +202,27 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🆘 Support
 
-If you encounter any issues or have questions:
+If you encounter any issues:
 
-1. Check the [API documentation](http://localhost:3000/docs) when server is running
-2. Review the [Code Manual](documents/code-manual.md) for detailed architecture information
-3. Create an issue in the repository with detailed information about the problem
-4. For development questions, refer to the comprehensive type definitions and inline comments
+1. Check the [API documentation](http://localhost:4000/docs)
+2. Review the [Code Manual](documents/code-manual.md)
+3. Create an issue in the repository
+4. Refer to the comprehensive type definitions and inline comments
 
 ## Database Seeding 🌱
 
-The project includes comprehensive database seeding automation to quickly set up development and production data.
+The project includes comprehensive database seeding automation.
 
 ### Available Seeding Scripts
 
-| Script | Description | Use Case |
-|--------|-------------|----------|
-| `bun run db:seed:provinces` | Seeds all 76 Thai provinces | Required foundation data |
-| `bun run db:seed:dev` | Seeds essential development data | Quick development setup |
-| `bun run db:seed` | Seeds comprehensive sample data | Full demo/testing data |
-| `bun run db:fresh` | Reset + provinces + dev data | Fresh development environment |
-| `bun run db:fresh:full` | Reset + provinces + full sample data | Complete reset with all data |
-| `bun run setup:dev` | Migrate + provinces + dev data | First-time development setup |
+| Script | Description |
+|--------|-------------|
+| `bun run db:seed:provinces` | Seeds all 76 Thai provinces |
+| `bun run db:seed:dev` | Seeds essential development data |
+| `bun run db:seed` | Seeds comprehensive sample data |
+| `bun run db:fresh` | Reset + provinces + dev data |
+| `bun run db:fresh:full` | Reset + provinces + full sample data |
+| `bun run setup:dev` | Migrate + provinces + dev data |
 
 ### Quick Start Options
 
@@ -451,64 +230,51 @@ The project includes comprehensive database seeding automation to quickly set up
 ```bash
 bun run setup:dev
 ```
-This will:
-- Run database migrations
-- Seed all Thai provinces
-- Add development users, gyms, trainers, classes, and tags
-- Set up sample relationships
 
 **For Demo/Testing:**
 ```bash
 bun run db:fresh:full
 ```
-This will:
-- Reset the entire database
-- Run migrations
-- Seed all provinces and comprehensive sample data
-- Perfect for demonstrations or testing
 
 **For Clean Restart:**
 ```bash
 bun run db:fresh
 ```
-This will:
-- Reset the database
-- Set up essential development data only
 
 ### What Gets Seeded
 
 #### Essential Data (`db:seed:dev`)
-- **Provinces**: 5 key provinces (Bangkok, Chiang Mai, Phuket, Chon Buri, Surat Thani)
-- **Users**: 3 development users (admin, dev, test accounts)
+- **Provinces**: 5 key provinces
+- **Users**: 3 development users
 - **Classes**: 4 essential Muay Thai classes
 - **Tags**: 5 useful gym/trainer tags
-- **Gyms**: 2 sample gyms (Dev Muay Thai Gym, Test Fight Club)
-- **Trainers**: 2 sample trainers (one gym-based, one freelance)
+- **Gyms**: 2 sample gyms
+- **Trainers**: 2 sample trainers
 - **Relationships**: Sample gym-tag and trainer-class associations
 
 #### Comprehensive Data (`db:seed`)
 - **All essential data above, plus:**
-- **Gyms**: 5 detailed Muay Thai gyms across different provinces
-- **Trainers**: 5 professional trainers with varied specializations
-- **Extended relationships**: Complete associations between all entities
+- **Gyms**: 5 detailed Muay Thai gyms
+- **Trainers**: 5 professional trainers
+- **Extended relationships**: Complete associations
 
 ### Seed Data Features
 
-✅ **Idempotent**: Safe to run multiple times (skips existing data)  
+✅ **Idempotent**: Safe to run multiple times  
 ✅ **Conflict Resolution**: Uses `ON CONFLICT DO NOTHING` strategy  
-✅ **Realistic Data**: Thai language support with proper province associations  
+✅ **Realistic Data**: Thai language support  
 ✅ **Relationship Mapping**: Proper foreign key relationships  
 ✅ **Development Ready**: Includes test accounts and sample entities  
 
 ### Sample Data Overview
 
 **Development Gyms:**
-- **Dev Muay Thai Gym** (Bangkok) - Development testing
-- **Test Fight Club** (Chiang Mai) - System testing
+- **Dev Muay Thai Gym** (Bangkok)
+- **Test Fight Club** (Chiang Mai)
 
 **Sample Trainers:**
-- **Dev Trainer** - Gym-based trainer for development
-- **Test Instructor** - Freelance instructor for testing
+- **Dev Trainer**
+- **Test Instructor**
 
 **Classes Available:**
 - Basic Muay Thai, Advanced Muay Thai, Kids Classes, Cardio Muay Thai
@@ -539,4 +305,4 @@ DB_PASSWORD=admin
 DB_NAME=mymuaythai
 ```
 
-**Note**: All seeding scripts include proper error handling and will gracefully handle duplicate data conflicts. 
+**Note**: All seeding scripts include proper error handling. 
