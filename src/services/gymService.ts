@@ -237,12 +237,35 @@ export async function updateGym(id: string, gymData: UpdateGymRequest): Promise<
 }
 
 export async function deleteGym(id: string): Promise<boolean> {
-  const result = await db.update(schema.gyms)
-    .set({ is_active: false })
-    .where(eq(schema.gyms.id, id))
-    .returning();
-  
-  return result.length > 0;
+  try {
+    // Start a transaction to ensure data consistency
+    const result = await db.transaction(async (tx) => {
+      // First, delete all related gym images
+      await tx.delete(schema.gymImages)
+        .where(eq(schema.gymImages.gym_id, id));
+      
+      // Delete all gym tags associations
+      await tx.delete(schema.gymTags)
+        .where(eq(schema.gymTags.gym_id, id));
+      
+      // Update trainers to remove gym association (set gym_id to null)
+      await tx.update(schema.trainers)
+        .set({ gym_id: null })
+        .where(eq(schema.trainers.gym_id, id));
+      
+      // Finally, delete the gym itself
+      const deletedGym = await tx.delete(schema.gyms)
+        .where(eq(schema.gyms.id, id))
+        .returning();
+      
+      return deletedGym;
+    });
+    
+    return result.length > 0;
+  } catch (error) {
+    console.error('Error deleting gym:', error);
+    return false;
+  }
 }
 
 export async function addGymImage(gymId: string, imageUrl: string): Promise<GymImage> {

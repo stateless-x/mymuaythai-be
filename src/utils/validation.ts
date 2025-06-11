@@ -1,10 +1,10 @@
 import { z } from 'zod';
 
 // Common validation patterns
-const emailSchema = z.string().email('Invalid email format');
-const phoneSchema = z.string().regex(/^[0-9\-+\s()]+$/, 'Invalid phone number format').optional();
+const emailSchema = z.string().email('Invalid email format').optional();
+const phoneSchema = z.string().regex(/^[0-9\-+\s()]+$/, 'Invalid phone number format');
 const urlSchema = z.string().url('Invalid URL format').optional();
-const lineIdSchema = z.string().regex(/^@[a-zA-Z0-9._-]+$/, 'Line ID must start with @ and contain valid characters').optional();
+const lineIdSchema = z.string().regex(/^[a-zA-Z0-9._-]+$/, 'Line ID must contain valid characters').optional();
 
 // Gym validation schemas
 export const createGymSchema = z.object({

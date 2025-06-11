@@ -196,7 +196,7 @@ export async function gymRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // Delete gym (soft delete)
+  // Delete gym (hard delete)
   fastify.delete('/gyms/:id', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const { id } = request.params;
     
