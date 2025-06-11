@@ -1,6 +1,6 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import * as gymService from '../services/gymService';
-import { createGymSchema, updateGymSchema, gymQuerySchema, formatZodError } from '../utils/validation';
+import { createGymSchema, updateGymSchema, gymQuerySchema, gymByIdQuerySchema, formatZodError } from '../utils/validation';
 import { ValidationError, NotFoundError } from '../utils/database';
 import { UpdateGymRequest } from '../types';
 import { z } from 'zod';
@@ -23,9 +23,9 @@ export async function gymRoutes(fastify: FastifyInstance) {
   fastify.get('/gyms', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       // Validate query parameters
-      const { page, pageSize, search, provinceId } = gymQuerySchema.parse(request.query);
+      const { page, pageSize, search, provinceId, includeInactive } = gymQuerySchema.parse(request.query);
       
-      const result = await gymService.getAllGyms(page, pageSize, search, provinceId);
+      const result = await gymService.getAllGyms(page, pageSize, search, provinceId, includeInactive);
       
       const response: ApiResponse<typeof result.gyms> = {
         success: true,
@@ -49,24 +49,34 @@ export async function gymRoutes(fastify: FastifyInstance) {
 
   // Get gym by ID
   fastify.get('/gyms/:id', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-    const { id } = request.params;
-    
-    if (!id) {
-      throw new ValidationError('Gym ID is required');
-    }
-    
-    const gym = await gymService.getGymById(id);
-    
-    if (!gym) {
-      throw new NotFoundError('Gym', id);
-    }
+    try {
+      const { id } = request.params;
+      
+      if (!id) {
+        throw new ValidationError('Gym ID is required');
+      }
 
-    const response: ApiResponse<typeof gym> = {
-      success: true,
-      data: gym,
-    };
-    
-    return reply.code(200).send(response);
+      // Parse query parameters
+      const { includeInactive } = gymByIdQuerySchema.parse(request.query);
+      
+      const gym = await gymService.getGymById(id, includeInactive);
+      
+      if (!gym) {
+        throw new NotFoundError('Gym', id);
+      }
+
+      const response: ApiResponse<typeof gym> = {
+        success: true,
+        data: gym,
+      };
+      
+      return reply.code(200).send(response);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new ValidationError(`Query validation failed: ${formatZodError(error)}`);
+      }
+      throw error;
+    }
   });
 
   // Get gym images

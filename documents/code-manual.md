@@ -111,7 +111,7 @@ bun run db:seed      # Seed data
 
 - **Input Validation**: Type-safe validation
 - **SQL Injection Protection**: Parameterized queries
-- **CORS Configuration**: Proper setup
+- ** Configuration**: Proper setup
 - **Security Headers**: Helmet middleware
 
 ## 10. Future Extensibility

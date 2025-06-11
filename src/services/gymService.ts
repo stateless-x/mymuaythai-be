@@ -49,9 +49,14 @@ function mapRawGymToGymWithDetails(rawGymData: any, provinceData: Province | nul
   return result;
 }
 
-export async function getAllGyms(page: number = 1, pageSize: number = 10, searchTerm?: string, provinceId?: number): Promise<{ gyms: GymWithDetails[], total: number }> {
+export async function getAllGyms(page: number = 1, pageSize: number = 10, searchTerm?: string, provinceId?: number, includeInactive: boolean = false): Promise<{ gyms: GymWithDetails[], total: number }> {
   const offset = (page - 1) * pageSize;
-  const whereConditions: (SQL<unknown> | undefined)[] = [eq(schema.gyms.is_active, true)];
+  const whereConditions: (SQL<unknown> | undefined)[] = [];
+
+  // Only filter by is_active if includeInactive is false (default behavior for public)
+  if (!includeInactive) {
+    whereConditions.push(eq(schema.gyms.is_active, true));
+  }
 
   if (provinceId) {
     whereConditions.push(eq(schema.gyms.province_id, provinceId));
@@ -91,7 +96,7 @@ export async function getAllGyms(page: number = 1, pageSize: number = 10, search
     })
     .from(schema.gyms)
     .leftJoin(schema.provinces, eq(schema.gyms.province_id, schema.provinces.id))
-    .where(and(...validWhereConditions))
+    .where(validWhereConditions.length > 0 ? and(...validWhereConditions) : undefined)
     .orderBy(desc(schema.gyms.created_at))
     .limit(pageSize)
     .offset(offset);
@@ -101,7 +106,7 @@ export async function getAllGyms(page: number = 1, pageSize: number = 10, search
   const totalQuery = db.select({ value: count() })
     .from(schema.gyms)
     .leftJoin(schema.provinces, eq(schema.gyms.province_id, schema.provinces.id))
-    .where(and(...validWhereConditions));
+    .where(validWhereConditions.length > 0 ? and(...validWhereConditions) : undefined);
   
   const totalResult = await totalQuery;
   const total = totalResult[0]?.value ?? 0;
@@ -113,7 +118,16 @@ export async function getAllGyms(page: number = 1, pageSize: number = 10, search
   return { gyms: gymsWithDetailsList, total };
 }
 
-export async function getGymById(id: string): Promise<GymWithDetails | null> {
+export async function getGymById(id: string, includeInactive: boolean = false): Promise<GymWithDetails | null> {
+  const whereConditions: (SQL<unknown> | undefined)[] = [eq(schema.gyms.id, id)];
+  
+  // Only filter by is_active if includeInactive is false (default behavior for public)
+  if (!includeInactive) {
+    whereConditions.push(eq(schema.gyms.is_active, true));
+  }
+
+  const validWhereConditions = whereConditions.filter(c => c !== undefined) as SQL<unknown>[];
+
   const gymsResult = await db.select({
       id: schema.gyms.id,
       name_th: schema.gyms.name_th,
@@ -132,7 +146,7 @@ export async function getGymById(id: string): Promise<GymWithDetails | null> {
     })
     .from(schema.gyms)
     .leftJoin(schema.provinces, eq(schema.gyms.province_id, schema.provinces.id))
-    .where(and(eq(schema.gyms.id, id), eq(schema.gyms.is_active, true)));
+    .where(and(...validWhereConditions));
 
   if (gymsResult.length === 0) {
     return null;

@@ -78,8 +78,16 @@ export const serverConfig = {
 // CORS configuration
 export const corsConfig = {
   origin: isProduction 
-    ? env.ALLOWED_ORIGINS?.split(',') || ['https://mymuaythai.com']
-    : true,
+    ? env.ALLOWED_ORIGINS?.split(',') || [
+        'https://mymuaythai.com',
+        'http://localhost:3000',
+        'http://localhost:3333'
+      ]
+    : [
+        'http://localhost:3000',
+        'http://localhost:3333',
+        true
+      ],
   credentials: true,
 };
 

@@ -53,9 +53,14 @@ function mapRawTrainerToTrainerWithDetails(
   return result;
 }
 
-export async function getAllTrainers(page: number = 1, pageSize: number = 20, searchTerm?: string, provinceId?: number, gymId?: string, isFreelance?: boolean): Promise<{ trainers: TrainerWithDetails[], total: number }> {
+export async function getAllTrainers(page: number = 1, pageSize: number = 20, searchTerm?: string, provinceId?: number, gymId?: string, isFreelance?: boolean, includeInactive: boolean = false): Promise<{ trainers: TrainerWithDetails[], total: number }> {
   const offset = (page - 1) * pageSize;
-  const whereConditions: (SQL<unknown> | undefined)[] = [eq(schema.trainers.is_active, true)];
+  const whereConditions: (SQL<unknown> | undefined)[] = [];
+
+  // Only filter by is_active if includeInactive is false (default behavior for public)
+  if (!includeInactive) {
+    whereConditions.push(eq(schema.trainers.is_active, true));
+  }
 
   if (provinceId) {
     whereConditions.push(eq(schema.trainers.province_id, provinceId));
@@ -111,7 +116,7 @@ export async function getAllTrainers(page: number = 1, pageSize: number = 20, se
   .from(schema.trainers)
   .leftJoin(schema.provinces, eq(schema.trainers.province_id, schema.provinces.id))
   .leftJoin(schema.gyms, eq(schema.trainers.gym_id, schema.gyms.id))
-  .where(and(...validWhereConditions))
+  .where(validWhereConditions.length > 0 ? and(...validWhereConditions) : undefined)
   .orderBy(desc(schema.trainers.created_at))
   .limit(pageSize)
   .offset(offset);
@@ -122,7 +127,7 @@ export async function getAllTrainers(page: number = 1, pageSize: number = 20, se
     .from(schema.trainers)
     .leftJoin(schema.provinces, eq(schema.trainers.province_id, schema.provinces.id))
     .leftJoin(schema.gyms, eq(schema.trainers.gym_id, schema.gyms.id))
-    .where(and(...validWhereConditions));
+    .where(validWhereConditions.length > 0 ? and(...validWhereConditions) : undefined);
   
   const totalResult = await totalQuery;
   const total = totalResult[0]?.value ?? 0;
@@ -138,7 +143,16 @@ export async function getAllTrainers(page: number = 1, pageSize: number = 20, se
   return { trainers: trainersWithDetailsList, total };
 }
 
-export async function getTrainerById(id: string): Promise<TrainerWithDetails | null> {
+export async function getTrainerById(id: string, includeInactive: boolean = false): Promise<TrainerWithDetails | null> {
+  const whereConditions: (SQL<unknown> | undefined)[] = [eq(schema.trainers.id, id)];
+  
+  // Only filter by is_active if includeInactive is false (default behavior for public)
+  if (!includeInactive) {
+    whereConditions.push(eq(schema.trainers.is_active, true));
+  }
+
+  const validWhereConditions = whereConditions.filter(c => c !== undefined) as SQL<unknown>[];
+
   const trainersResult = await db.select({
     id: schema.trainers.id,
     first_name_th: schema.trainers.first_name_th,
@@ -161,7 +175,7 @@ export async function getTrainerById(id: string): Promise<TrainerWithDetails | n
   .from(schema.trainers)
   .leftJoin(schema.provinces, eq(schema.trainers.province_id, schema.provinces.id))
   .leftJoin(schema.gyms, eq(schema.trainers.gym_id, schema.gyms.id))
-  .where(and(eq(schema.trainers.id, id), eq(schema.trainers.is_active, true)));
+  .where(and(...validWhereConditions));
 
   if (trainersResult.length === 0) {
     return null;
@@ -195,16 +209,16 @@ export async function getTrainerById(id: string): Promise<TrainerWithDetails | n
   );
 }
 
-export async function getTrainersByGym(gymId: string, page: number = 1, pageSize: number = 20): Promise<{ trainers: TrainerWithDetails[], total: number }> {
-  return getAllTrainers(page, pageSize, undefined, undefined, gymId);
+export async function getTrainersByGym(gymId: string, page: number = 1, pageSize: number = 20, includeInactive: boolean = false): Promise<{ trainers: TrainerWithDetails[], total: number }> {
+  return getAllTrainers(page, pageSize, undefined, undefined, gymId, undefined, includeInactive);
 }
 
-export async function getTrainersByProvince(provinceId: number, page: number = 1, pageSize: number = 20): Promise<{ trainers: TrainerWithDetails[], total: number }> {
-  return getAllTrainers(page, pageSize, undefined, provinceId);
+export async function getTrainersByProvince(provinceId: number, page: number = 1, pageSize: number = 20, includeInactive: boolean = false): Promise<{ trainers: TrainerWithDetails[], total: number }> {
+  return getAllTrainers(page, pageSize, undefined, provinceId, undefined, undefined, includeInactive);
 }
 
-export async function getFreelanceTrainers(page: number = 1, pageSize: number = 20): Promise<{ trainers: TrainerWithDetails[], total: number }> {
-  return getAllTrainers(page, pageSize, undefined, undefined, undefined, true);
+export async function getFreelanceTrainers(page: number = 1, pageSize: number = 20, includeInactive: boolean = false): Promise<{ trainers: TrainerWithDetails[], total: number }> {
+  return getAllTrainers(page, pageSize, undefined, undefined, undefined, true, includeInactive);
 }
 
 export async function getTrainerClasses(trainerId: string): Promise<Class[]> {
