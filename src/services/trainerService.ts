@@ -37,6 +37,7 @@ function mapRawTrainerToTrainerWithDetails(
     gym_id: rawTrainerData.gym_id,
     is_active: rawTrainerData.is_active,
     created_at: rawTrainerData.created_at,
+    updated_at: rawTrainerData.updated_at,
     province: provinceData,
     classes,
     tags
@@ -105,6 +106,7 @@ export async function getAllTrainers(page: number = 1, pageSize: number = 20, se
     gym_id: schema.trainers.gym_id,
     is_active: schema.trainers.is_active,
     created_at: schema.trainers.created_at,
+    updated_at: schema.trainers.updated_at,
     provinceData: schema.provinces,
     gymData: schema.gyms
   })
@@ -163,6 +165,7 @@ export async function getTrainerById(id: string, includeInactive: boolean = fals
     gym_id: schema.trainers.gym_id,
     is_active: schema.trainers.is_active,
     created_at: schema.trainers.created_at,
+    updated_at: schema.trainers.updated_at,
     provinceData: schema.provinces,
     gymData: schema.gyms
   })
@@ -298,7 +301,10 @@ export async function updateTrainer(id: string, trainerData: UpdateTrainerReques
       // Update the main trainer fields only if there are fields to update
       if (Object.keys(trainerFields).length > 0) {
         updatedTrainer = await tx.update(schema.trainers)
-          .set(trainerFields as Partial<NewTrainer>)
+          .set({
+            ...trainerFields as Partial<NewTrainer>,
+            updated_at: new Date(),
+          })
           .where(eq(schema.trainers.id, id))
           .returning();
         

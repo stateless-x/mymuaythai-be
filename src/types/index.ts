@@ -47,14 +47,14 @@ export interface ApiResponse<T> {
 
 // --- Gym Specific API Types ---
 // CreateGymRequest needs to align with the new gyms schema from ERD
-export interface CreateGymRequest extends Omit<NewGym, 'id' | 'created_at' | 'is_active'> {
+export interface CreateGymRequest extends Omit<NewGym, 'id' | 'created_at' | 'updated_at' | 'is_active'> {
   // province_id is required as per schema (references)
   // name_th, name_en are required
   // Other fields like description_th, description_en, phone, email, map_url, youtube_url, line are optional (text or nullable)
   tags?: Tag[];
 }
 
-export interface UpdateGymRequest extends Partial<Omit<NewGym, 'id' | 'created_at'>> {
+export interface UpdateGymRequest extends Partial<Omit<NewGym, 'id' | 'created_at' | 'updated_at'>> {
   // is_active can be updated, so not omitting it here explicitly
   // but typically handled by a dedicated activate/deactivate endpoint.
   tags?: Tag[];
@@ -74,6 +74,7 @@ export interface GymWithDetails {
   line_id: string | null;
   is_active: boolean;
   created_at: Date;
+  updated_at: Date;
   province: Province | null;
   images?: GymImage[];
   tags?: Tag[]; // via gymTags
@@ -83,14 +84,14 @@ export interface GymWithDetails {
 }
 
 // --- Trainer Specific API Types ---
-export interface CreateTrainerRequest extends Omit<NewTrainer, 'id' | 'created_at' | 'is_active'> {
+export interface CreateTrainerRequest extends Omit<NewTrainer, 'id' | 'created_at' | 'updated_at' | 'is_active'> {
   // first_name_th, first_name_en are required.
   // Other fields are optional based on schema.
   // gym_id and province_id are optional FKs.
   tags?: Tag[];
 }
 
-export interface UpdateTrainerRequest extends Partial<Omit<NewTrainer, 'id' | 'created_at'>> {
+export interface UpdateTrainerRequest extends Partial<Omit<NewTrainer, 'id' | 'created_at' | 'updated_at'>> {
   tags?: Tag[];
 }
 
@@ -109,6 +110,7 @@ export interface TrainerWithDetails {
   gym_id: string | null;
   is_active: boolean;
   created_at: Date;
+  updated_at: Date;
   province: Province | null;
   primaryGym?: Gym | null; // The gym listed in trainers.gym_id
   classes?: Class[]; // via trainerClasses

@@ -36,6 +36,7 @@ function mapRawGymToGymWithDetails(rawGymData: any, provinceData: Province | nul
       line_id: rawGymData.line_id,
       is_active: rawGymData.is_active,
       created_at: rawGymData.created_at,
+      updated_at: rawGymData.updated_at,
       province: provinceData,
       images,
       tags,
@@ -88,6 +89,7 @@ export async function getAllGyms(page: number = 1, pageSize: number = 10, search
       line_id: schema.gyms.line_id,
       is_active: schema.gyms.is_active,
       created_at: schema.gyms.created_at,
+      updated_at: schema.gyms.updated_at,
       provinceData: schema.provinces 
     })
     .from(schema.gyms)
@@ -154,6 +156,7 @@ export async function getGymById(id: string, includeInactive: boolean = false): 
       line_id: schema.gyms.line_id,
       is_active: schema.gyms.is_active,
       created_at: schema.gyms.created_at,
+      updated_at: schema.gyms.updated_at,
       provinceData: schema.provinces 
     })
     .from(schema.gyms)
@@ -197,6 +200,7 @@ export async function getGymsByProvince(provinceId: number): Promise<GymWithDeta
       line_id: schema.gyms.line_id,
       is_active: schema.gyms.is_active,
       created_at: schema.gyms.created_at,
+      updated_at: schema.gyms.updated_at,
       provinceData: schema.provinces
     })
     .from(schema.gyms)
@@ -296,7 +300,10 @@ export async function updateGym(id: string, gymData: UpdateGymRequest): Promise<
       // Update the main gym fields only if there are fields to update
       if (Object.keys(gymFields).length > 0) {
         updatedGym = await tx.update(schema.gyms)
-          .set(gymFields as Partial<NewGym>)
+          .set({
+            ...gymFields as Partial<NewGym>,
+            updated_at: new Date(),
+          })
           .where(eq(schema.gyms.id, id))
           .returning();
         

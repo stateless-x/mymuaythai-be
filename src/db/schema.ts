@@ -29,6 +29,7 @@ export const gyms = pgTable('gyms', {
   line_id: text('line_id'),
   is_active: boolean('is_active').default(true).notNull(),
   created_at: timestamp('created_at').defaultNow().notNull(),
+  updated_at: timestamp('updated_at').defaultNow().notNull(),
 });
 
 export const gymImages = pgTable('gym_images', {
@@ -53,6 +54,7 @@ export const trainers = pgTable('trainers', {
   province_id: integer('province_id').references(() => provinces.id),
   is_active: boolean('is_active').default(true).notNull(),
   created_at: timestamp('created_at').defaultNow().notNull(),
+  updated_at: timestamp('updated_at').defaultNow().notNull(),
 });
 
 export const classes = pgTable('classes', {
