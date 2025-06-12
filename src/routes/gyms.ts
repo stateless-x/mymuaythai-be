@@ -144,9 +144,9 @@ export async function gymRoutes(fastify: FastifyInstance) {
   fastify.post('/gyms', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       // Validate request body
-      const gymData = createGymSchema.parse(request.body);
+      const validatedData = createGymSchema.parse(request.body);
       
-      const gym = await gymService.createGym(gymData);
+      const gym = await gymService.createGym(validatedData as any);
       
       const response: ApiResponse<typeof gym> = {
         success: true,

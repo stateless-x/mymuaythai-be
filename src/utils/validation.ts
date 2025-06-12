@@ -18,6 +18,11 @@ export const createGymSchema = z.object({
   map_url: urlSchema,
   youtube_url: urlSchema,
   line_id: lineIdSchema,
+  tags: z.array(z.object({
+    id: z.string().uuid('Invalid tag ID format'),
+    name_th: z.string().min(1, 'Thai tag name is required'),
+    name_en: z.string().min(1, 'English tag name is required'),
+  })).optional(),
 });
 
 export const updateGymSchema = createGymSchema.partial().extend({
@@ -41,6 +46,11 @@ export const createTrainerSchema = z.object({
   is_freelance: z.boolean().default(false),
   gym_id: z.string().uuid('Invalid gym ID format').optional(),
   province_id: z.number().int().positive('Province ID must be positive').optional(),
+  tags: z.array(z.object({
+    id: z.string().uuid('Invalid tag ID format'),
+    name_th: z.string().min(1, 'Thai tag name is required'),
+    name_en: z.string().min(1, 'English tag name is required'),
+  })).optional(),
 });
 
 export const updateTrainerSchema = createTrainerSchema.partial().refine(

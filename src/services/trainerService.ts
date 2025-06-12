@@ -35,16 +35,12 @@ function mapRawTrainerToTrainerWithDetails(
     line_id: rawTrainerData.line_id,
     is_freelance: rawTrainerData.is_freelance,
     gym_id: rawTrainerData.gym_id,
-    province_id: rawTrainerData.province_id,
     is_active: rawTrainerData.is_active,
     created_at: rawTrainerData.created_at,
+    province: provinceData,
     classes,
     tags
   };
-
-  if (provinceData !== null) {
-    result.province = provinceData;
-  }
 
   if (gymData !== null) {
     result.primaryGym = gymData;
@@ -107,7 +103,6 @@ export async function getAllTrainers(page: number = 1, pageSize: number = 20, se
     line_id: schema.trainers.line_id,
     is_freelance: schema.trainers.is_freelance,
     gym_id: schema.trainers.gym_id,
-    province_id: schema.trainers.province_id,
     is_active: schema.trainers.is_active,
     created_at: schema.trainers.created_at,
     provinceData: schema.provinces,
@@ -166,7 +161,6 @@ export async function getTrainerById(id: string, includeInactive: boolean = fals
     line_id: schema.trainers.line_id,
     is_freelance: schema.trainers.is_freelance,
     gym_id: schema.trainers.gym_id,
-    province_id: schema.trainers.province_id,
     is_active: schema.trainers.is_active,
     created_at: schema.trainers.created_at,
     provinceData: schema.provinces,
@@ -235,25 +229,154 @@ export async function getTrainerClasses(trainerId: string): Promise<Class[]> {
   return db.select().from(schema.classes).where(inArray(schema.classes.id, classIds));
 }
 
-export async function createTrainer(trainerData: CreateTrainerRequest): Promise<Trainer> {
-  const result = await db.insert(schema.trainers)
-    .values(trainerData as NewTrainer)
-    .returning();
-  
-  if (!result || result.length === 0) {
-    throw new Error('Trainer creation failed, no data returned.');
+export async function createTrainer(trainerData: CreateTrainerRequest): Promise<TrainerWithDetails> {
+  try {
+    // Extract tags from trainer data if present
+    const { tags, ...trainerFields } = trainerData as any;
+    
+    const result = await db.transaction(async (tx) => {
+      // Create the trainer
+      const newTrainer = await tx.insert(schema.trainers)
+        .values(trainerFields as NewTrainer)
+        .returning();
+      
+      if (!newTrainer || newTrainer.length === 0) {
+        throw new Error('Trainer creation failed, no data returned.');
+      }
+      
+      const createdTrainer = newTrainer[0]!;
+      
+      // Fetch province data if province_id exists
+      let provinceData: Province | null = null;
+      if (createdTrainer.province_id) {
+        const province = await tx.select().from(schema.provinces).where(eq(schema.provinces.id, createdTrainer.province_id));
+        provinceData = province[0] || null;
+      }
+      
+      // Fetch gym data if gym_id exists
+      let gymData: Gym | null = null;
+      if (createdTrainer.gym_id) {
+        const gym = await tx.select().from(schema.gyms).where(eq(schema.gyms.id, createdTrainer.gym_id));
+        gymData = gym[0] || null;
+      }
+      
+      // Create tag associations if tags are provided
+      let trainerTags: Tag[] = [];
+      if (tags && tags.length > 0) {
+        const trainerTagsToInsert = tags.map((tag: any) => ({
+          trainer_id: createdTrainer.id,
+          tag_id: tag.id,
+        }));
+        
+        await tx.insert(schema.trainerTags)
+          .values(trainerTagsToInsert);
+        
+        trainerTags = tags;
+      }
+      
+      // Fetch classes (will be empty for new trainer)
+      const classes = [] as Class[];
+      
+      return mapRawTrainerToTrainerWithDetails(createdTrainer, provinceData, gymData, classes, trainerTags);
+    });
+    
+    return result;
+  } catch (error) {
+    console.error('Error creating trainer:', error);
+    throw new Error('Trainer creation failed.');
   }
-  
-  return result[0]!;
 }
 
-export async function updateTrainer(id: string, trainerData: UpdateTrainerRequest): Promise<Trainer | null> {
-  const result = await db.update(schema.trainers)
-    .set(trainerData as Partial<NewTrainer>)
-    .where(eq(schema.trainers.id, id))
-    .returning();
-  
-  return result[0] || null;
+export async function updateTrainer(id: string, trainerData: UpdateTrainerRequest): Promise<TrainerWithDetails | null> {
+  try {
+    // Extract tags from trainer data if present
+    const { tags, ...trainerFields } = trainerData as any;
+    
+    const result = await db.transaction(async (tx) => {
+      let updatedTrainer: Trainer[] = [];
+      
+      // Update the main trainer fields only if there are fields to update
+      if (Object.keys(trainerFields).length > 0) {
+        updatedTrainer = await tx.update(schema.trainers)
+          .set(trainerFields as Partial<NewTrainer>)
+          .where(eq(schema.trainers.id, id))
+          .returning();
+        
+        if (!updatedTrainer || updatedTrainer.length === 0) {
+          return null;
+        }
+      } else {
+        // If no trainer fields to update, just fetch the current trainer
+        const currentTrainer = await tx.select()
+          .from(schema.trainers)
+          .where(eq(schema.trainers.id, id));
+        
+        if (!currentTrainer || currentTrainer.length === 0) {
+          return null;
+        }
+        updatedTrainer = currentTrainer;
+      }
+      
+      const trainer = updatedTrainer[0]!;
+      
+      // Fetch province data if province_id exists
+      let provinceData: Province | null = null;
+      if (trainer.province_id) {
+        const province = await tx.select().from(schema.provinces).where(eq(schema.provinces.id, trainer.province_id));
+        provinceData = province[0] || null;
+      }
+      
+      // Fetch gym data if gym_id exists
+      let gymData: Gym | null = null;
+      if (trainer.gym_id) {
+        const gym = await tx.select().from(schema.gyms).where(eq(schema.gyms.id, trainer.gym_id));
+        gymData = gym[0] || null;
+      }
+      
+      // Handle tags update if provided
+      if (tags) {
+        // First, delete existing trainer tag associations
+        await tx.delete(schema.trainerTags)
+          .where(eq(schema.trainerTags.trainer_id, id));
+        
+        // Then, insert new tag associations
+        if (tags.length > 0) {
+          const trainerTagsToInsert = tags.map((tag: any) => ({
+            trainer_id: id,
+            tag_id: tag.id,
+          }));
+          
+          await tx.insert(schema.trainerTags)
+            .values(trainerTagsToInsert);
+        }
+      }
+      
+      // Fetch current tags
+      const trainerTagsRecords = await tx.select({ tag_id: schema.trainerTags.tag_id })
+        .from(schema.trainerTags)
+        .where(eq(schema.trainerTags.trainer_id, id));
+      const tagIds = trainerTagsRecords.map(tt => tt.tag_id);
+      const currentTags = tagIds.length > 0 
+        ? await tx.select().from(schema.tags).where(inArray(schema.tags.id, tagIds))
+        : [];
+      
+      // Fetch classes
+      const trainerClassesRecords = await tx.select({ class_id: schema.trainerClasses.class_id })
+        .from(schema.trainerClasses)
+        .where(eq(schema.trainerClasses.trainer_id, id));
+      const classIds = trainerClassesRecords.map(tc => tc.class_id);
+      const classes = classIds.length > 0 
+        ? await tx.select().from(schema.classes).where(inArray(schema.classes.id, classIds))
+        : [];
+      
+      return mapRawTrainerToTrainerWithDetails(trainer, provinceData, gymData, classes, currentTags);
+    });
+    
+    return result;
+  } catch (error) {
+    console.error('Error updating trainer:', error);
+    throw new Error('Trainer update failed.');
+  }
 }
 
 export async function deleteTrainer(id: string): Promise<boolean> {

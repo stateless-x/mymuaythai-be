@@ -36,15 +36,11 @@ function mapRawGymToGymWithDetails(rawGymData: any, provinceData: Province | nul
       line_id: rawGymData.line_id,
       is_active: rawGymData.is_active,
       created_at: rawGymData.created_at,
+      province: provinceData,
       images,
       tags,
       associatedTrainers,
   };
-
-  if (provinceData !== null) {
-      result.province = provinceData;
-  }
-  // If provinceData is null, result.province remains undefined, matching province?: Province | null;
 
   return result;
 }
@@ -111,8 +107,24 @@ export async function getAllGyms(page: number = 1, pageSize: number = 10, search
   const totalResult = await totalQuery;
   const total = totalResult[0]?.value ?? 0;
 
-  const gymsWithDetailsList: GymWithDetails[] = gymsResult.map(g => 
-      mapRawGymToGymWithDetails(g, g.provinceData as Province | null)
+  // Fetch additional details for each gym
+  const gymsWithDetailsList: GymWithDetails[] = await Promise.all(
+    gymsResult.map(async (g) => {
+      // Fetch images for this gym
+      const images = await db.select().from(schema.gymImages).where(eq(schema.gymImages.gym_id, g.id));
+      
+      // Fetch tags for this gym
+      const gymTagsRecords = await db.select({ tag_id: schema.gymTags.tag_id }).from(schema.gymTags).where(eq(schema.gymTags.gym_id, g.id));
+      const tagIds = gymTagsRecords.map(gt => gt.tag_id);
+      const tags = tagIds.length > 0 
+        ? await db.select().from(schema.tags).where(sql`${schema.tags.id} IN ${tagIds}`)
+        : [];
+
+      // Fetch associated trainers for this gym
+      const associatedTrainers = await db.select().from(schema.trainers).where(eq(schema.trainers.gym_id, g.id));
+
+      return mapRawGymToGymWithDetails(g, g.provinceData as Province | null, images, tags, associatedTrainers);
+    })
   );
 
   return { gyms: gymsWithDetailsList, total };
@@ -192,24 +204,77 @@ export async function getGymsByProvince(provinceId: number): Promise<GymWithDeta
     .where(and(eq(schema.gyms.province_id, provinceId), eq(schema.gyms.is_active, true)))
     .orderBy(desc(schema.gyms.created_at));
 
-    return gymsResult.map(g => 
-      mapRawGymToGymWithDetails(g, g.provinceData as Province | null)
+    // Fetch additional details for each gym
+    return Promise.all(
+      gymsResult.map(async (g) => {
+        // Fetch images for this gym
+        const images = await db.select().from(schema.gymImages).where(eq(schema.gymImages.gym_id, g.id));
+        
+        // Fetch tags for this gym
+        const gymTagsRecords = await db.select({ tag_id: schema.gymTags.tag_id }).from(schema.gymTags).where(eq(schema.gymTags.gym_id, g.id));
+        const tagIds = gymTagsRecords.map(gt => gt.tag_id);
+        const tags = tagIds.length > 0 
+          ? await db.select().from(schema.tags).where(sql`${schema.tags.id} IN ${tagIds}`)
+          : [];
+
+        // Fetch associated trainers for this gym
+        const associatedTrainers = await db.select().from(schema.trainers).where(eq(schema.trainers.gym_id, g.id));
+
+        return mapRawGymToGymWithDetails(g, g.provinceData as Province | null, images, tags, associatedTrainers);
+      })
     );
 }
 
-export async function createGym(gymData: CreateGymRequest): Promise<Gym> {
+export async function createGym(gymData: CreateGymRequest): Promise<GymWithDetails> {
   try {
     const validatedData = createGymSchema.parse(gymData);
     
-    const result = await db.insert(schema.gyms)
-      .values(validatedData as NewGym)
-      .returning();
+    // Extract tags from validated data if present
+    const { tags, ...gymFields } = validatedData as any;
     
-    if (!result || result.length === 0) {
-      throw new Error('Gym creation failed, no data returned.');
-    }
+    const result = await db.transaction(async (tx) => {
+      // Create the gym
+      const newGym = await tx.insert(schema.gyms)
+        .values(gymFields as NewGym)
+        .returning();
+      
+      if (!newGym || newGym.length === 0) {
+        throw new Error('Gym creation failed, no data returned.');
+      }
+      
+      const createdGym = newGym[0]!;
+      
+      // Fetch province data if province_id exists
+      let provinceData: Province | null = null;
+      if (createdGym.province_id) {
+        const province = await tx.select().from(schema.provinces).where(eq(schema.provinces.id, createdGym.province_id));
+        provinceData = province[0] || null;
+      }
+      
+      // Create tag associations if tags are provided
+      let gymTags: Tag[] = [];
+      if (tags && tags.length > 0) {
+        const gymTagsToInsert = tags.map((tag: any) => ({
+          gym_id: createdGym.id,
+          tag_id: tag.id,
+        }));
+        
+        await tx.insert(schema.gymTags)
+          .values(gymTagsToInsert);
+        
+        gymTags = tags;
+      }
+      
+      // Fetch images (will be empty for new gym)
+      const images = await tx.select().from(schema.gymImages).where(eq(schema.gymImages.gym_id, createdGym.id));
+      
+      // Fetch associated trainers (will be empty for new gym)
+      const associatedTrainers = await tx.select().from(schema.trainers).where(eq(schema.trainers.gym_id, createdGym.id));
+      
+      return mapRawGymToGymWithDetails(createdGym, provinceData, images, gymTags, associatedTrainers);
+    });
     
-    return result[0]!;
+    return result;
   } catch (error) {
     if (error instanceof z.ZodError) {
       throw new Error(`Validation failed: ${formatZodError(error)}`);
@@ -218,16 +283,82 @@ export async function createGym(gymData: CreateGymRequest): Promise<Gym> {
   }
 }
 
-export async function updateGym(id: string, gymData: UpdateGymRequest): Promise<Gym | null> {
+export async function updateGym(id: string, gymData: UpdateGymRequest): Promise<GymWithDetails | null> {
   try {
     const validatedData = updateGymSchema.parse(gymData);
     
-    const result = await db.update(schema.gyms)
-      .set(validatedData as Partial<NewGym>)
-      .where(eq(schema.gyms.id, id))
-      .returning();
+    // Extract tags from validated data if present
+    const { tags, ...gymFields } = validatedData as any;
     
-    return result[0] || null;
+    const result = await db.transaction(async (tx) => {
+      let updatedGym: Gym[] = [];
+      
+      // Update the main gym fields only if there are fields to update
+      if (Object.keys(gymFields).length > 0) {
+        updatedGym = await tx.update(schema.gyms)
+          .set(gymFields as Partial<NewGym>)
+          .where(eq(schema.gyms.id, id))
+          .returning();
+        
+        if (!updatedGym || updatedGym.length === 0) {
+          return null;
+        }
+      } else {
+        // If no gym fields to update, just fetch the current gym
+        const currentGym = await tx.select()
+          .from(schema.gyms)
+          .where(eq(schema.gyms.id, id));
+        
+        if (!currentGym || currentGym.length === 0) {
+          return null;
+        }
+        updatedGym = currentGym;
+      }
+      
+      const gym = updatedGym[0]!;
+      
+      // Fetch province data if province_id exists
+      let provinceData: Province | null = null;
+      if (gym.province_id) {
+        const province = await tx.select().from(schema.provinces).where(eq(schema.provinces.id, gym.province_id));
+        provinceData = province[0] || null;
+      }
+      
+      // Handle tags update if provided
+      if (tags) {
+        // First, delete existing gym tag associations
+        await tx.delete(schema.gymTags)
+          .where(eq(schema.gymTags.gym_id, id));
+        
+        // Then, insert new tag associations
+        if (tags.length > 0) {
+          const gymTagsToInsert = tags.map((tag: any) => ({
+            gym_id: id,
+            tag_id: tag.id,
+          }));
+          
+          await tx.insert(schema.gymTags)
+            .values(gymTagsToInsert);
+        }
+      }
+      
+      // Fetch current tags
+      const gymTagsRecords = await tx.select({ tag_id: schema.gymTags.tag_id }).from(schema.gymTags).where(eq(schema.gymTags.gym_id, id));
+      const tagIds = gymTagsRecords.map(gt => gt.tag_id);
+      const currentTags = tagIds.length > 0 
+        ? await tx.select().from(schema.tags).where(sql`${schema.tags.id} IN ${tagIds}`)
+        : [];
+      
+      // Fetch images
+      const images = await tx.select().from(schema.gymImages).where(eq(schema.gymImages.gym_id, id));
+      
+      // Fetch associated trainers
+      const associatedTrainers = await tx.select().from(schema.trainers).where(eq(schema.trainers.gym_id, id));
+      
+      return mapRawGymToGymWithDetails(gym, provinceData, images, currentTags, associatedTrainers);
+    });
+    
+    return result;
   } catch (error) {
     if (error instanceof z.ZodError) {
       throw new Error(`Validation failed: ${formatZodError(error)}`);

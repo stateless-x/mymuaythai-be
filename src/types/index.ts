@@ -51,11 +51,13 @@ export interface CreateGymRequest extends Omit<NewGym, 'id' | 'created_at' | 'is
   // province_id is required as per schema (references)
   // name_th, name_en are required
   // Other fields like description_th, description_en, phone, email, map_url, youtube_url, line are optional (text or nullable)
+  tags?: Tag[];
 }
 
 export interface UpdateGymRequest extends Partial<Omit<NewGym, 'id' | 'created_at'>> {
   // is_active can be updated, so not omitting it here explicitly
   // but typically handled by a dedicated activate/deactivate endpoint.
+  tags?: Tag[];
 }
 
 // For displaying a gym with its related details
@@ -72,7 +74,7 @@ export interface GymWithDetails {
   line_id: string | null;
   is_active: boolean;
   created_at: Date;
-  province?: Province | null;
+  province: Province | null;
   images?: GymImage[];
   tags?: Tag[]; // via gymTags
   // Direct classes link for a gym is not in ERD, only via trainers.
@@ -85,14 +87,30 @@ export interface CreateTrainerRequest extends Omit<NewTrainer, 'id' | 'created_a
   // first_name_th, first_name_en are required.
   // Other fields are optional based on schema.
   // gym_id and province_id are optional FKs.
+  tags?: Tag[];
 }
 
 export interface UpdateTrainerRequest extends Partial<Omit<NewTrainer, 'id' | 'created_at'>> {
+  tags?: Tag[];
 }
 
-export interface TrainerWithDetails extends Trainer {
-  province?: Province;
-  primaryGym?: Gym; // The gym listed in trainers.gym_id
+export interface TrainerWithDetails {
+  id: string;
+  first_name_th: string;
+  last_name_th: string | null;
+  first_name_en: string;
+  last_name_en: string | null;
+  bio_th: string | null;
+  bio_en: string | null;
+  phone: string | null;
+  email: string | null;
+  line_id: string | null;
+  is_freelance: boolean;
+  gym_id: string | null;
+  is_active: boolean;
+  created_at: Date;
+  province: Province | null;
+  primaryGym?: Gym | null; // The gym listed in trainers.gym_id
   classes?: Class[]; // via trainerClasses
   tags?: Tag[]; // via trainerTags
 }
