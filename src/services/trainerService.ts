@@ -347,7 +347,7 @@ export async function createTrainer(trainerData: CreateTrainerRequest): Promise<
             duration_minutes: classData.duration,
             max_students: classData.maxStudents,
             price: Math.round(classData.price * 100), // Convert to smallest currency unit (satang)
-            is_private_class: true,
+            is_private_class: classData.isPrivateClass !== false,
             is_active: classData.isActive !== false,
           };
           
@@ -476,7 +476,7 @@ export async function updateTrainer(id: string, trainerData: UpdateTrainerReques
               duration_minutes: classData.duration,
               max_students: classData.maxStudents,
               price: Math.round(classData.price * 100), // Convert to smallest currency unit (satang)
-              is_private_class: true,
+              is_private_class: classData.isPrivateClass !== false,
               is_active: classData.isActive !== false,
             };
             
