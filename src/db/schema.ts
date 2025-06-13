@@ -50,8 +50,9 @@ export const trainers = pgTable('trainers', {
   email: text('email'),
   line_id: text('line_id'),
   is_freelance: boolean('is_freelance').default(false).notNull(),
-  gym_id: uuid('gym_id').references(() => gyms.id), // Nullable as per M2M possibility and freelance
+  gym_id: uuid('gym_id').references(() => gyms.id), 
   province_id: integer('province_id').references(() => provinces.id),
+  exp_year: integer('exp_year'),
   is_active: boolean('is_active').default(true).notNull(),
   created_at: timestamp('created_at').defaultNow().notNull(),
   updated_at: timestamp('updated_at').defaultNow().notNull(),
@@ -68,7 +69,19 @@ export const classes = pgTable('classes', {
 export const trainerClasses = pgTable('trainer_classes', {
   id: uuid('id').primaryKey().defaultRandom(),
   trainer_id: uuid('trainer_id').references(() => trainers.id).notNull(),
-  class_id: uuid('class_id').references(() => classes.id).notNull(),
+  class_id: uuid('class_id').references(() => classes.id), // Make nullable for private classes
+  // Private class fields
+  name_th: text('name_th'),
+  name_en: text('name_en'),
+  description_th: text('description_th'),
+  description_en: text('description_en'),
+  duration_minutes: integer('duration_minutes'),
+  max_students: integer('max_students'),
+  price: integer('price'), // Price in smallest currency unit (e.g., satang for THB)
+  is_active: boolean('is_active').default(true).notNull(),
+  is_private_class: boolean('is_private_class').default(false).notNull(),
+  created_at: timestamp('created_at').defaultNow().notNull(),
+  updated_at: timestamp('updated_at').defaultNow().notNull(),
 });
 
 export const tags = pgTable('tags', {

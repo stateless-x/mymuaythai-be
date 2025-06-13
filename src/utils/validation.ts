@@ -4,7 +4,7 @@ import { z } from 'zod';
 const emailSchema = z.string().email('Invalid email format').optional();
 const phoneSchema = z.string().regex(/^[0-9\-+\s()]+$/, 'Invalid phone number format');
 const urlSchema = z.string().url('Invalid URL format').optional();
-const lineIdSchema = z.string().regex(/^[a-zA-Z0-9._-]+$/, 'Line ID must contain valid characters').optional();
+const lineIdSchema = z.string().regex(/^@?[a-zA-Z0-9._-]+$/, 'Line ID must contain valid characters (optional @ at start)').optional();
 
 // Gym validation schemas
 export const createGymSchema = z.object({
@@ -46,14 +46,73 @@ export const createTrainerSchema = z.object({
   is_freelance: z.boolean().default(false),
   gym_id: z.string().uuid('Invalid gym ID format').optional(),
   province_id: z.number().int().positive('Province ID must be positive').optional(),
+  exp_year: z.number().int().min(0, 'Experience years must be non-negative').max(100, 'Experience years too high').optional(),
   tags: z.array(z.object({
     id: z.string().uuid('Invalid tag ID format'),
     name_th: z.string().min(1, 'Thai tag name is required'),
     name_en: z.string().min(1, 'English tag name is required'),
   })).optional(),
+  classes: z.array(z.object({
+    id: z.string().optional(),
+    name: z.object({
+      th: z.string().min(1, 'Thai class name is required'),
+      en: z.string().min(1, 'English class name is required'),
+    }),
+    description: z.object({
+      th: z.string().min(1, 'Thai description is required'),
+      en: z.string().min(1, 'English description is required'),
+    }),
+    duration: z.number().int().min(1, 'Duration must be at least 1 minute'),
+    price: z.number().min(0, 'Price must be non-negative'),
+    currency: z.string().optional(),
+    maxStudents: z.number().int().min(1, 'Max students must be at least 1'),
+    isActive: z.boolean().optional(),
+  })).optional(),
 });
 
 export const updateTrainerSchema = createTrainerSchema.partial().refine(
+  (data) => Object.keys(data).length > 0,
+  { message: 'At least one field must be provided for update' }
+);
+
+// Trainer class validation schemas
+export const createTrainerClassSchema = z.object({
+  trainer_id: z.string().uuid('Invalid trainer ID format'),
+  class_id: z.string().uuid('Invalid class ID format').optional(),
+  name_th: z.string().min(1, 'Thai class name is required').max(255, 'Class name too long').optional(),
+  name_en: z.string().min(1, 'English class name is required').max(255, 'Class name too long').optional(),
+  description_th: z.string().max(5000, 'Thai description too long').optional(),
+  description_en: z.string().max(5000, 'English description too long').optional(),
+  duration_minutes: z.number().int().min(1, 'Duration must be at least 1 minute').max(1440, 'Duration cannot exceed 24 hours').optional(),
+  max_students: z.number().int().min(1, 'Max students must be at least 1').max(100, 'Max students too high').optional(),
+  price: z.number().int().min(0, 'Price must be non-negative').optional(),
+  is_private_class: z.boolean().default(false),
+}).refine(
+  (data) => {
+    // Either class_id must be provided (existing class) or private class fields must be provided
+    if (!data.class_id && !data.is_private_class) {
+      return false;
+    }
+    if (data.is_private_class && (!data.name_th || !data.name_en)) {
+      return false;
+    }
+    return true;
+  },
+  { message: 'Either provide class_id for existing class or complete private class information (name_th, name_en) for private class' }
+);
+
+export const updateTrainerClassSchema = z.object({
+  class_id: z.string().uuid('Invalid class ID format').optional(),
+  name_th: z.string().min(1, 'Thai class name is required').max(255, 'Class name too long').optional(),
+  name_en: z.string().min(1, 'English class name is required').max(255, 'Class name too long').optional(),
+  description_th: z.string().max(5000, 'Thai description too long').optional(),
+  description_en: z.string().max(5000, 'English description too long').optional(),
+  duration_minutes: z.number().int().min(1, 'Duration must be at least 1 minute').max(1440, 'Duration cannot exceed 24 hours').optional(),
+  max_students: z.number().int().min(1, 'Max students must be at least 1').max(100, 'Max students too high').optional(),
+  price: z.number().int().min(0, 'Price must be non-negative').optional(),
+  is_active: z.boolean().optional(),
+  is_private_class: z.boolean().optional(),
+}).refine(
   (data) => Object.keys(data).length > 0,
   { message: 'At least one field must be provided for update' }
 );
@@ -76,6 +135,7 @@ export const trainerQuerySchema = paginationSchema.extend({
   gymId: z.string().uuid().optional(),
   isFreelance: z.string().transform((val) => val === 'true').pipe(z.boolean()).optional(),
   includeInactive: z.string().transform((val) => val === 'true').pipe(z.boolean()).optional(),
+  includeClasses: z.string().transform((val) => val === 'true').pipe(z.boolean()).optional(),
 });
 
 export const gymByIdQuerySchema = z.object({

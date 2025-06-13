@@ -10,9 +10,9 @@ export async function trainerRoutes(fastify: FastifyInstance) {
   fastify.get('/trainers', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       // Validate query parameters
-      const { page, pageSize, search, provinceId, gymId, isFreelance, includeInactive } = trainerQuerySchema.parse(request.query);
+      const { page, pageSize, search, provinceId, gymId, isFreelance, includeInactive, includeClasses } = trainerQuerySchema.parse(request.query);
 
-      const { trainers, total } = await trainerService.getAllTrainers(page, pageSize, search, provinceId, gymId, isFreelance, includeInactive);
+      const { trainers, total } = await trainerService.getAllTrainers(page, pageSize, search, provinceId, gymId, isFreelance, includeInactive, includeClasses);
       const totalPages = Math.ceil(total / pageSize);
       
       const response: ApiResponse<PaginatedResponse<TrainerWithDetails>> = {
@@ -78,17 +78,13 @@ export async function trainerRoutes(fastify: FastifyInstance) {
   // Get trainers by gym with pagination
   fastify.get('/trainers/gym/:gymId', async (request: FastifyRequest<{ 
     Params: { gymId: string };
-    Querystring: { 
-      page?: string;
-      pageSize?: string;
-    }
   }>, reply: FastifyReply) => {
     try {
       const { gymId } = request.params;
-      const page = parseInt(request.query.page || '1');
-      const pageSize = parseInt(request.query.pageSize || '20');
+      // Validate query parameters
+      const { page, pageSize, includeInactive, includeClasses } = trainerQuerySchema.parse(request.query);
       
-      const { trainers, total } = await trainerService.getTrainersByGym(gymId, page, pageSize);
+      const { trainers, total } = await trainerService.getTrainersByGym(gymId, page, pageSize, includeInactive, includeClasses);
       const totalPages = Math.ceil(total / pageSize);
       
       const response: ApiResponse<PaginatedResponse<TrainerWithDetails>> = {
@@ -104,6 +100,9 @@ export async function trainerRoutes(fastify: FastifyInstance) {
       };
       return reply.code(200).send(response);
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new ValidationError(`Query validation failed: ${formatZodError(error)}`);
+      }
       const response: ApiResponse<null> = {
         success: false,
         error: 'Failed to retrieve trainers by gym'
@@ -115,17 +114,13 @@ export async function trainerRoutes(fastify: FastifyInstance) {
   // Get trainers by province with pagination
   fastify.get('/trainers/province/:provinceId', async (request: FastifyRequest<{ 
     Params: { provinceId: string };
-    Querystring: { 
-      page?: string;
-      pageSize?: string;
-    }
   }>, reply: FastifyReply) => {
     try {
       const { provinceId } = request.params;
-      const page = parseInt(request.query.page || '1');
-      const pageSize = parseInt(request.query.pageSize || '20');
+      // Validate query parameters
+      const { page, pageSize, includeInactive, includeClasses } = trainerQuerySchema.parse(request.query);
       
-      const { trainers, total } = await trainerService.getTrainersByProvince(parseInt(provinceId), page, pageSize);
+      const { trainers, total } = await trainerService.getTrainersByProvince(parseInt(provinceId), page, pageSize, includeInactive, includeClasses);
       const totalPages = Math.ceil(total / pageSize);
       
       const response: ApiResponse<PaginatedResponse<TrainerWithDetails>> = {
@@ -141,6 +136,9 @@ export async function trainerRoutes(fastify: FastifyInstance) {
       };
       return reply.code(200).send(response);
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new ValidationError(`Query validation failed: ${formatZodError(error)}`);
+      }
       const response: ApiResponse<null> = {
         success: false,
         error: 'Failed to retrieve trainers by province'
@@ -150,17 +148,12 @@ export async function trainerRoutes(fastify: FastifyInstance) {
   });
 
   // Get freelance trainers with pagination
-  fastify.get('/trainers/freelance', async (request: FastifyRequest<{
-    Querystring: { 
-      page?: string;
-      pageSize?: string;
-    }
-  }>, reply: FastifyReply) => {
+  fastify.get('/trainers/freelance', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const page = parseInt(request.query.page || '1');
-      const pageSize = parseInt(request.query.pageSize || '20');
+      // Validate query parameters
+      const { page, pageSize, includeInactive, includeClasses } = trainerQuerySchema.parse(request.query);
       
-      const { trainers, total } = await trainerService.getFreelanceTrainers(page, pageSize);
+      const { trainers, total } = await trainerService.getFreelanceTrainers(page, pageSize, includeInactive, includeClasses);
       const totalPages = Math.ceil(total / pageSize);
       
       const response: ApiResponse<PaginatedResponse<TrainerWithDetails>> = {
@@ -176,6 +169,9 @@ export async function trainerRoutes(fastify: FastifyInstance) {
       };
       return reply.code(200).send(response);
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new ValidationError(`Query validation failed: ${formatZodError(error)}`);
+      }
       const response: ApiResponse<null> = {
         success: false,
         error: 'Failed to retrieve freelance trainers'
@@ -208,17 +204,13 @@ export async function trainerRoutes(fastify: FastifyInstance) {
   // Search trainers with pagination
   fastify.get('/trainers/search/:query', async (request: FastifyRequest<{ 
     Params: { query: string };
-    Querystring: { 
-      page?: string;
-      pageSize?: string;
-    }
   }>, reply: FastifyReply) => {
     try {
       const { query } = request.params;
-      const page = parseInt(request.query.page || '1');
-      const pageSize = parseInt(request.query.pageSize || '20');
+      // Validate query parameters
+      const { page, pageSize, includeClasses } = trainerQuerySchema.parse(request.query);
       
-      const { trainers, total } = await trainerService.searchTrainers(query, page, pageSize);
+      const { trainers, total } = await trainerService.searchTrainers(query, page, pageSize, includeClasses);
       const totalPages = Math.ceil(total / pageSize);
       
       const response: ApiResponse<PaginatedResponse<TrainerWithDetails>> = {
@@ -234,6 +226,9 @@ export async function trainerRoutes(fastify: FastifyInstance) {
       };
       return reply.code(200).send(response);
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new ValidationError(`Query validation failed: ${formatZodError(error)}`);
+      }
       const response: ApiResponse<null> = {
         success: false,
         error: 'Failed to search trainers'

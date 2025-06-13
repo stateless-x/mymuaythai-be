@@ -6,6 +6,9 @@ import {
   CreateTrainerRequest,
   UpdateTrainerRequest,
   TrainerWithDetails,
+  TrainerClassWithDetails,
+  CreateTrainerClassRequest,
+  UpdateTrainerClassRequest,
   Province,
   Gym,
   Class,
@@ -19,7 +22,7 @@ function mapRawTrainerToTrainerWithDetails(
   rawTrainerData: any, 
   provinceData: Province | null, 
   gymData: Gym | null,
-  classes: Class[] = [], 
+  classes: TrainerClassWithDetails[] = [],
   tags: Tag[] = []
 ): TrainerWithDetails {
   const result: TrainerWithDetails = {
@@ -35,6 +38,7 @@ function mapRawTrainerToTrainerWithDetails(
     line_id: rawTrainerData.line_id,
     is_freelance: rawTrainerData.is_freelance,
     gym_id: rawTrainerData.gym_id,
+    exp_year: rawTrainerData.exp_year,
     is_active: rawTrainerData.is_active,
     created_at: rawTrainerData.created_at,
     updated_at: rawTrainerData.updated_at,
@@ -50,7 +54,7 @@ function mapRawTrainerToTrainerWithDetails(
   return result;
 }
 
-export async function getAllTrainers(page: number = 1, pageSize: number = 20, searchTerm?: string, provinceId?: number, gymId?: string, isFreelance?: boolean, includeInactive: boolean = false): Promise<{ trainers: TrainerWithDetails[], total: number }> {
+export async function getAllTrainers(page: number = 1, pageSize: number = 20, searchTerm?: string, provinceId?: number, gymId?: string, isFreelance?: boolean, includeInactive: boolean = false, includeClasses: boolean = false): Promise<{ trainers: TrainerWithDetails[], total: number }> {
   const offset = (page - 1) * pageSize;
   const whereConditions: (SQL<unknown> | undefined)[] = [];
 
@@ -104,6 +108,7 @@ export async function getAllTrainers(page: number = 1, pageSize: number = 20, se
     line_id: schema.trainers.line_id,
     is_freelance: schema.trainers.is_freelance,
     gym_id: schema.trainers.gym_id,
+    exp_year: schema.trainers.exp_year,
     is_active: schema.trainers.is_active,
     created_at: schema.trainers.created_at,
     updated_at: schema.trainers.updated_at,
@@ -129,13 +134,48 @@ export async function getAllTrainers(page: number = 1, pageSize: number = 20, se
   const totalResult = await totalQuery;
   const total = totalResult[0]?.value ?? 0;
 
-  const trainersWithDetailsList: TrainerWithDetails[] = trainersResult.map(t => 
-    mapRawTrainerToTrainerWithDetails(
-      t, 
-      t.provinceData as Province | null, 
-      t.gymData as Gym | null
-    )
-  );
+  // Fetch classes for each trainer if includeClasses is true (for admin)
+  const trainersWithDetailsList: TrainerWithDetails[] = [];
+  
+  for (const trainer of trainersResult) {
+    let classes: TrainerClassWithDetails[] = [];
+    
+    if (includeClasses) {
+      // Get trainer's detailed class info (including both standard and private classes)
+      const trainerClassesDetailed = await db.select()
+        .from(schema.trainerClasses)
+        .leftJoin(schema.classes, eq(schema.trainerClasses.class_id, schema.classes.id))
+        .where(eq(schema.trainerClasses.trainer_id, trainer.id));
+
+      classes = trainerClassesDetailed.map(tc => ({
+        id: tc.trainer_classes.id,
+        trainer_id: tc.trainer_classes.trainer_id,
+        class_id: tc.trainer_classes.class_id,
+        name_th: tc.trainer_classes.name_th || tc.classes?.name_th || null,
+        name_en: tc.trainer_classes.name_en || tc.classes?.name_en || null,
+        description_th: tc.trainer_classes.description_th || tc.classes?.description_th || null,
+        description_en: tc.trainer_classes.description_en || tc.classes?.description_en || null,
+        duration_minutes: tc.trainer_classes.duration_minutes,
+        max_students: tc.trainer_classes.max_students,
+        price: tc.trainer_classes.price,
+        is_active: tc.trainer_classes.is_active,
+        is_private_class: tc.trainer_classes.is_private_class,
+        created_at: tc.trainer_classes.created_at,
+        updated_at: tc.trainer_classes.updated_at,
+        class: tc.classes || null
+      }));
+    }
+    
+    const trainerWithDetails = mapRawTrainerToTrainerWithDetails(
+      trainer, 
+      trainer.provinceData as Province | null, 
+      trainer.gymData as Gym | null,
+      classes,
+      [] // Empty tags array for list view - can be extended later if needed
+    );
+    
+    trainersWithDetailsList.push(trainerWithDetails);
+  }
 
   return { trainers: trainersWithDetailsList, total };
 }
@@ -163,6 +203,7 @@ export async function getTrainerById(id: string, includeInactive: boolean = fals
     line_id: schema.trainers.line_id,
     is_freelance: schema.trainers.is_freelance,
     gym_id: schema.trainers.gym_id,
+    exp_year: schema.trainers.exp_year,
     is_active: schema.trainers.is_active,
     created_at: schema.trainers.created_at,
     updated_at: schema.trainers.updated_at,
@@ -178,15 +219,6 @@ export async function getTrainerById(id: string, includeInactive: boolean = fals
     return null;
   }
   const rawTrainerData = trainersResult[0]!;
-  
-  // Get trainer's classes via trainerClasses junction table
-  const trainerClassesRecords = await db.select({ class_id: schema.trainerClasses.class_id })
-    .from(schema.trainerClasses)
-    .where(eq(schema.trainerClasses.trainer_id, id));
-  const classIds = trainerClassesRecords.map(tc => tc.class_id);
-  const classes = classIds.length > 0 
-    ? await db.select().from(schema.classes).where(inArray(schema.classes.id, classIds))
-    : [];
 
   // Get trainer's tags via trainerTags junction table
   const trainerTagsRecords = await db.select({ tag_id: schema.trainerTags.tag_id })
@@ -197,6 +229,30 @@ export async function getTrainerById(id: string, includeInactive: boolean = fals
     ? await db.select().from(schema.tags).where(inArray(schema.tags.id, tagIds))
     : [];
 
+  // Get trainer's detailed class info (including both standard and private classes)
+  const trainerClassesDetailed = await db.select()
+    .from(schema.trainerClasses)
+    .leftJoin(schema.classes, eq(schema.trainerClasses.class_id, schema.classes.id))
+    .where(eq(schema.trainerClasses.trainer_id, id));
+
+  const classes: TrainerClassWithDetails[] = trainerClassesDetailed.map(tc => ({
+    id: tc.trainer_classes.id,
+    trainer_id: tc.trainer_classes.trainer_id,
+    class_id: tc.trainer_classes.class_id,
+    name_th: tc.trainer_classes.name_th || tc.classes?.name_th || null,
+    name_en: tc.trainer_classes.name_en || tc.classes?.name_en || null,
+    description_th: tc.trainer_classes.description_th || tc.classes?.description_th || null,
+    description_en: tc.trainer_classes.description_en || tc.classes?.description_en || null,
+    duration_minutes: tc.trainer_classes.duration_minutes,
+    max_students: tc.trainer_classes.max_students,
+    price: tc.trainer_classes.price,
+    is_active: tc.trainer_classes.is_active,
+    is_private_class: tc.trainer_classes.is_private_class,
+    created_at: tc.trainer_classes.created_at,
+    updated_at: tc.trainer_classes.updated_at,
+    class: tc.classes || null
+  }));
+
   return mapRawTrainerToTrainerWithDetails(
     rawTrainerData, 
     rawTrainerData.provinceData as Province | null,
@@ -206,16 +262,16 @@ export async function getTrainerById(id: string, includeInactive: boolean = fals
   );
 }
 
-export async function getTrainersByGym(gymId: string, page: number = 1, pageSize: number = 20, includeInactive: boolean = false): Promise<{ trainers: TrainerWithDetails[], total: number }> {
-  return getAllTrainers(page, pageSize, undefined, undefined, gymId, undefined, includeInactive);
+export async function getTrainersByGym(gymId: string, page: number = 1, pageSize: number = 20, includeInactive: boolean = false, includeClasses: boolean = false): Promise<{ trainers: TrainerWithDetails[], total: number }> {
+  return getAllTrainers(page, pageSize, undefined, undefined, gymId, undefined, includeInactive, includeClasses);
 }
 
-export async function getTrainersByProvince(provinceId: number, page: number = 1, pageSize: number = 20, includeInactive: boolean = false): Promise<{ trainers: TrainerWithDetails[], total: number }> {
-  return getAllTrainers(page, pageSize, undefined, provinceId, undefined, undefined, includeInactive);
+export async function getTrainersByProvince(provinceId: number, page: number = 1, pageSize: number = 20, includeInactive: boolean = false, includeClasses: boolean = false): Promise<{ trainers: TrainerWithDetails[], total: number }> {
+  return getAllTrainers(page, pageSize, undefined, provinceId, undefined, undefined, includeInactive, includeClasses);
 }
 
-export async function getFreelanceTrainers(page: number = 1, pageSize: number = 20, includeInactive: boolean = false): Promise<{ trainers: TrainerWithDetails[], total: number }> {
-  return getAllTrainers(page, pageSize, undefined, undefined, undefined, true, includeInactive);
+export async function getFreelanceTrainers(page: number = 1, pageSize: number = 20, includeInactive: boolean = false, includeClasses: boolean = false): Promise<{ trainers: TrainerWithDetails[], total: number }> {
+  return getAllTrainers(page, pageSize, undefined, undefined, undefined, true, includeInactive, includeClasses);
 }
 
 export async function getTrainerClasses(trainerId: string): Promise<Class[]> {
@@ -223,7 +279,7 @@ export async function getTrainerClasses(trainerId: string): Promise<Class[]> {
     .from(schema.trainerClasses)
     .where(eq(schema.trainerClasses.trainer_id, trainerId));
   
-  const classIds = trainerClassesRecords.map(tc => tc.class_id);
+  const classIds = trainerClassesRecords.map(tc => tc.class_id).filter(id => id !== null) as string[];
   
   if (classIds.length === 0) {
     return [];
@@ -234,8 +290,8 @@ export async function getTrainerClasses(trainerId: string): Promise<Class[]> {
 
 export async function createTrainer(trainerData: CreateTrainerRequest): Promise<TrainerWithDetails> {
   try {
-    // Extract tags from trainer data if present
-    const { tags, ...trainerFields } = trainerData as any;
+    // Extract tags and classes from trainer data if present
+    const { tags, classes, ...trainerFields } = trainerData as any;
     
     const result = await db.transaction(async (tx) => {
       // Create the trainer
@@ -277,10 +333,51 @@ export async function createTrainer(trainerData: CreateTrainerRequest): Promise<
         trainerTags = tags;
       }
       
-      // Fetch classes (will be empty for new trainer)
-      const classes = [] as Class[];
+      // Create trainer classes if classes are provided
+      let trainerClasses: TrainerClassWithDetails[] = [];
+      if (classes && classes.length > 0) {
+        for (const classData of classes) {
+          const trainerClassToInsert = {
+            trainer_id: createdTrainer.id,
+            class_id: null, // Private class
+            name_th: classData.name.th,
+            name_en: classData.name.en,
+            description_th: classData.description.th,
+            description_en: classData.description.en,
+            duration_minutes: classData.duration,
+            max_students: classData.maxStudents,
+            price: Math.round(classData.price * 100), // Convert to smallest currency unit (satang)
+            is_private_class: true,
+            is_active: classData.isActive !== false,
+          };
+          
+          const result = await tx.insert(schema.trainerClasses)
+            .values(trainerClassToInsert)
+            .returning();
+          
+          if (result[0]) {
+            trainerClasses.push({
+              id: result[0].id,
+              trainer_id: result[0].trainer_id,
+              class_id: result[0].class_id,
+              name_th: result[0].name_th,
+              name_en: result[0].name_en,
+              description_th: result[0].description_th,
+              description_en: result[0].description_en,
+              duration_minutes: result[0].duration_minutes,
+              max_students: result[0].max_students,
+              price: result[0].price,
+              is_active: result[0].is_active,
+              is_private_class: result[0].is_private_class,
+              created_at: result[0].created_at,
+              updated_at: result[0].updated_at,
+              class: null
+            });
+          }
+        }
+      }
       
-      return mapRawTrainerToTrainerWithDetails(createdTrainer, provinceData, gymData, classes, trainerTags);
+      return mapRawTrainerToTrainerWithDetails(createdTrainer, provinceData, gymData, trainerClasses, trainerTags);
     });
     
     return result;
@@ -292,8 +389,8 @@ export async function createTrainer(trainerData: CreateTrainerRequest): Promise<
 
 export async function updateTrainer(id: string, trainerData: UpdateTrainerRequest): Promise<TrainerWithDetails | null> {
   try {
-    // Extract tags from trainer data if present
-    const { tags, ...trainerFields } = trainerData as any;
+    // Extract tags and classes from trainer data if present
+    const { tags, classes, ...trainerFields } = trainerData as any;
     
     const result = await db.transaction(async (tx) => {
       let updatedTrainer: Trainer[] = [];
@@ -357,6 +454,38 @@ export async function updateTrainer(id: string, trainerData: UpdateTrainerReques
         }
       }
       
+      // Handle classes update if provided
+      if (classes) {
+        // First, delete existing trainer classes (private classes only)
+        await tx.delete(schema.trainerClasses)
+          .where(and(
+            eq(schema.trainerClasses.trainer_id, id),
+            eq(schema.trainerClasses.is_private_class, true)
+          ));
+        
+        // Then, insert new trainer classes
+        if (classes.length > 0) {
+          for (const classData of classes) {
+            const trainerClassToInsert = {
+              trainer_id: id,
+              class_id: null, // Private class
+              name_th: classData.name.th,
+              name_en: classData.name.en,
+              description_th: classData.description.th,
+              description_en: classData.description.en,
+              duration_minutes: classData.duration,
+              max_students: classData.maxStudents,
+              price: Math.round(classData.price * 100), // Convert to smallest currency unit (satang)
+              is_private_class: true,
+              is_active: classData.isActive !== false,
+            };
+            
+            await tx.insert(schema.trainerClasses)
+              .values(trainerClassToInsert);
+          }
+        }
+      }
+      
       // Fetch current tags
       const trainerTagsRecords = await tx.select({ tag_id: schema.trainerTags.tag_id })
         .from(schema.trainerTags)
@@ -366,16 +495,31 @@ export async function updateTrainer(id: string, trainerData: UpdateTrainerReques
         ? await tx.select().from(schema.tags).where(inArray(schema.tags.id, tagIds))
         : [];
       
-      // Fetch classes
-      const trainerClassesRecords = await tx.select({ class_id: schema.trainerClasses.class_id })
+      // Get combined classes (both standard and private)
+      const trainerClassesDetailed = await tx.select()
         .from(schema.trainerClasses)
+        .leftJoin(schema.classes, eq(schema.trainerClasses.class_id, schema.classes.id))
         .where(eq(schema.trainerClasses.trainer_id, id));
-      const classIds = trainerClassesRecords.map(tc => tc.class_id);
-      const classes = classIds.length > 0 
-        ? await tx.select().from(schema.classes).where(inArray(schema.classes.id, classIds))
-        : [];
+
+      const currentClasses: TrainerClassWithDetails[] = trainerClassesDetailed.map(tc => ({
+        id: tc.trainer_classes.id,
+        trainer_id: tc.trainer_classes.trainer_id,
+        class_id: tc.trainer_classes.class_id,
+        name_th: tc.trainer_classes.name_th || tc.classes?.name_th || null,
+        name_en: tc.trainer_classes.name_en || tc.classes?.name_en || null,
+        description_th: tc.trainer_classes.description_th || tc.classes?.description_th || null,
+        description_en: tc.trainer_classes.description_en || tc.classes?.description_en || null,
+        duration_minutes: tc.trainer_classes.duration_minutes,
+        max_students: tc.trainer_classes.max_students,
+        price: tc.trainer_classes.price,
+        is_active: tc.trainer_classes.is_active,
+        is_private_class: tc.trainer_classes.is_private_class,
+        created_at: tc.trainer_classes.created_at,
+        updated_at: tc.trainer_classes.updated_at,
+        class: tc.classes || null
+      }));
       
-      return mapRawTrainerToTrainerWithDetails(trainer, provinceData, gymData, classes, currentTags);
+      return mapRawTrainerToTrainerWithDetails(trainer, provinceData, gymData, currentClasses, currentTags);
     });
     
     return result;
@@ -423,10 +567,165 @@ export async function removeTrainerClass(trainerId: string, classId: string): Pr
   return result.length > 0;
 }
 
-export async function searchTrainers(query: string, page: number = 1, pageSize: number = 20): Promise<{ trainers: TrainerWithDetails[], total: number }> {
+export async function searchTrainers(query: string, page: number = 1, pageSize: number = 20, includeClasses: boolean = false): Promise<{ trainers: TrainerWithDetails[], total: number }> {
   if (!query?.trim()) {
     return { trainers: [], total: 0 };
   }
   
-  return getAllTrainers(page, pageSize, query.trim());
+  return getAllTrainers(page, pageSize, query.trim(), undefined, undefined, undefined, false, includeClasses);
+}
+
+// --- Trainer Class Management Functions ---
+
+export async function createTrainerClass(trainerClassData: CreateTrainerClassRequest): Promise<TrainerClassWithDetails | null> {
+  try {
+    const result = await db.insert(schema.trainerClasses)
+      .values({
+        trainer_id: trainerClassData.trainer_id,
+        class_id: trainerClassData.class_id || null,
+        name_th: trainerClassData.name_th || null,
+        name_en: trainerClassData.name_en || null,
+        description_th: trainerClassData.description_th || null,
+        description_en: trainerClassData.description_en || null,
+        duration_minutes: trainerClassData.duration_minutes || null,
+        max_students: trainerClassData.max_students || null,
+        price: trainerClassData.price || null,
+        is_private_class: trainerClassData.is_private_class || false,
+      })
+      .returning();
+
+    if (!result || result.length === 0) {
+      return null;
+    }
+
+    const createdTrainerClass = result[0]!;
+
+    // Fetch associated class if class_id exists
+    let associatedClass: Class | null = null;
+    if (createdTrainerClass.class_id) {
+      const classResult = await db.select()
+        .from(schema.classes)
+        .where(eq(schema.classes.id, createdTrainerClass.class_id));
+      associatedClass = classResult[0] || null;
+    }
+
+    return {
+      id: createdTrainerClass.id,
+      trainer_id: createdTrainerClass.trainer_id,
+      class_id: createdTrainerClass.class_id,
+      name_th: createdTrainerClass.name_th,
+      name_en: createdTrainerClass.name_en,
+      description_th: createdTrainerClass.description_th,
+      description_en: createdTrainerClass.description_en,
+      duration_minutes: createdTrainerClass.duration_minutes,
+      max_students: createdTrainerClass.max_students,
+      price: createdTrainerClass.price,
+      is_active: createdTrainerClass.is_active,
+      is_private_class: createdTrainerClass.is_private_class,
+      created_at: createdTrainerClass.created_at,
+      updated_at: createdTrainerClass.updated_at,
+      class: associatedClass
+    };
+  } catch (error) {
+    console.error('Error creating trainer class:', error);
+    return null;
+  }
+}
+
+export async function updateTrainerClass(id: string, trainerClassData: UpdateTrainerClassRequest): Promise<TrainerClassWithDetails | null> {
+  try {
+    const result = await db.update(schema.trainerClasses)
+      .set({
+        ...trainerClassData,
+        updated_at: new Date(),
+      })
+      .where(eq(schema.trainerClasses.id, id))
+      .returning();
+
+    if (!result || result.length === 0) {
+      return null;
+    }
+
+    const updatedTrainerClass = result[0]!;
+
+    // Fetch associated class if class_id exists
+    let associatedClass: Class | null = null;
+    if (updatedTrainerClass.class_id) {
+      const classResult = await db.select()
+        .from(schema.classes)
+        .where(eq(schema.classes.id, updatedTrainerClass.class_id));
+      associatedClass = classResult[0] || null;
+    }
+
+    return {
+      id: updatedTrainerClass.id,
+      trainer_id: updatedTrainerClass.trainer_id,
+      class_id: updatedTrainerClass.class_id,
+      name_th: updatedTrainerClass.name_th,
+      name_en: updatedTrainerClass.name_en,
+      description_th: updatedTrainerClass.description_th,
+      description_en: updatedTrainerClass.description_en,
+      duration_minutes: updatedTrainerClass.duration_minutes,
+      max_students: updatedTrainerClass.max_students,
+      price: updatedTrainerClass.price,
+      is_active: updatedTrainerClass.is_active,
+      is_private_class: updatedTrainerClass.is_private_class,
+      created_at: updatedTrainerClass.created_at,
+      updated_at: updatedTrainerClass.updated_at,
+      class: associatedClass
+    };
+  } catch (error) {
+    console.error('Error updating trainer class:', error);
+    return null;
+  }
+}
+
+export async function deleteTrainerClass(id: string): Promise<boolean> {
+  try {
+    const result = await db.update(schema.trainerClasses)
+      .set({ is_active: false })
+      .where(eq(schema.trainerClasses.id, id))
+      .returning();
+    
+    return result.length > 0;
+  } catch (error) {
+    console.error('Error deleting trainer class:', error);
+    return false;
+  }
+}
+
+export async function getTrainerClassById(id: string): Promise<TrainerClassWithDetails | null> {
+  try {
+    const result = await db.select()
+      .from(schema.trainerClasses)
+      .leftJoin(schema.classes, eq(schema.trainerClasses.class_id, schema.classes.id))
+      .where(eq(schema.trainerClasses.id, id));
+
+    if (!result || result.length === 0) {
+      return null;
+    }
+
+    const trainerClassData = result[0]!;
+
+    return {
+      id: trainerClassData.trainer_classes.id,
+      trainer_id: trainerClassData.trainer_classes.trainer_id,
+      class_id: trainerClassData.trainer_classes.class_id,
+      name_th: trainerClassData.trainer_classes.name_th,
+      name_en: trainerClassData.trainer_classes.name_en,
+      description_th: trainerClassData.trainer_classes.description_th,
+      description_en: trainerClassData.trainer_classes.description_en,
+      duration_minutes: trainerClassData.trainer_classes.duration_minutes,
+      max_students: trainerClassData.trainer_classes.max_students,
+      price: trainerClassData.trainer_classes.price,
+      is_active: trainerClassData.trainer_classes.is_active,
+      is_private_class: trainerClassData.trainer_classes.is_private_class,
+      created_at: trainerClassData.trainer_classes.created_at,
+      updated_at: trainerClassData.trainer_classes.updated_at,
+      class: trainerClassData.classes || null
+    };
+  } catch (error) {
+    console.error('Error getting trainer class:', error);
+    return null;
+  }
 } 

@@ -89,10 +89,26 @@ export interface CreateTrainerRequest extends Omit<NewTrainer, 'id' | 'created_a
   // Other fields are optional based on schema.
   // gym_id and province_id are optional FKs.
   tags?: Tag[];
+  classes?: Array<{
+    name: { th: string; en: string };
+    description: { th: string; en: string };
+    duration: number;
+    maxStudents: number;
+    price: number;
+    isActive?: boolean;
+  }>;
 }
 
 export interface UpdateTrainerRequest extends Partial<Omit<NewTrainer, 'id' | 'created_at' | 'updated_at'>> {
   tags?: Tag[];
+  classes?: Array<{
+    name: { th: string; en: string };
+    description: { th: string; en: string };
+    duration: number;
+    maxStudents: number;
+    price: number;
+    isActive?: boolean;
+  }>;
 }
 
 export interface TrainerWithDetails {
@@ -108,18 +124,56 @@ export interface TrainerWithDetails {
   line_id: string | null;
   is_freelance: boolean;
   gym_id: string | null;
+  exp_year: number | null;
   is_active: boolean;
   created_at: Date;
   updated_at: Date;
   province: Province | null;
   primaryGym?: Gym | null; // The gym listed in trainers.gym_id
-  classes?: Class[]; // via trainerClasses
+  classes?: TrainerClassWithDetails[]; // Combined standard and private classes
   tags?: Tag[]; // via trainerTags
 }
 
 // --- Class Specific API Types (Example) ---
 export interface ClassWithDetails extends Class {
   trainers?: Trainer[]; // Trainers who teach this class (via trainerClasses)
+}
+
+// TrainerClass with extended details for private classes
+export interface TrainerClassWithDetails {
+  id: string;
+  trainer_id: string;
+  class_id: string | null;
+  name_th: string | null;
+  name_en: string | null;
+  description_th: string | null;
+  description_en: string | null;
+  duration_minutes: number | null;
+  max_students: number | null;
+  price: number | null;
+  is_active: boolean;
+  is_private_class: boolean;
+  created_at: Date;
+  updated_at: Date;
+  class?: Class | null; // Reference to standard class if class_id exists
+}
+
+// Request types for creating/updating trainer classes
+export interface CreateTrainerClassRequest {
+  trainer_id: string;
+  class_id?: string; // Optional for private classes
+  name_th?: string;
+  name_en?: string;
+  description_th?: string;
+  description_en?: string;
+  duration_minutes?: number;
+  max_students?: number;
+  price?: number;
+  is_private_class?: boolean;
+}
+
+export interface UpdateTrainerClassRequest extends Partial<Omit<CreateTrainerClassRequest, 'trainer_id'>> {
+  is_active?: boolean;
 }
 
 // --- Paginated Response ---
