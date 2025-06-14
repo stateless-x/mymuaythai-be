@@ -23,6 +23,7 @@ export const createGymSchema = z.object({
     name_th: z.string().min(1, 'Thai tag name is required'),
     name_en: z.string().min(1, 'English tag name is required'),
   })).optional(),
+  associatedTrainers: z.array(z.string().uuid('Invalid trainer ID format')).optional(),
 });
 
 export const updateGymSchema = createGymSchema.partial().extend({
@@ -136,6 +137,7 @@ export const trainerQuerySchema = paginationSchema.extend({
   isFreelance: z.string().transform((val) => val === 'true').pipe(z.boolean()).optional(),
   includeInactive: z.string().transform((val) => val === 'true').pipe(z.boolean()).optional(),
   includeClasses: z.string().transform((val) => val === 'true').pipe(z.boolean()).optional(),
+  unassignedOnly: z.string().transform((val) => val === 'true').pipe(z.boolean()).optional(),
 });
 
 export const gymByIdQuerySchema = z.object({

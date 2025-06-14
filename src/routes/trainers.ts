@@ -10,9 +10,9 @@ export async function trainerRoutes(fastify: FastifyInstance) {
   fastify.get('/trainers', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       // Validate query parameters
-      const { page, pageSize, search, provinceId, gymId, isFreelance, includeInactive, includeClasses } = trainerQuerySchema.parse(request.query);
+      const { page, pageSize, search, provinceId, gymId, isFreelance, includeInactive, includeClasses, unassignedOnly } = trainerQuerySchema.parse(request.query);
 
-      const { trainers, total } = await trainerService.getAllTrainers(page, pageSize, search, provinceId, gymId, isFreelance, includeInactive, includeClasses);
+      const { trainers, total } = await trainerService.getAllTrainers(page, pageSize, search, provinceId, gymId, isFreelance, includeInactive, includeClasses, unassignedOnly);
       const totalPages = Math.ceil(total / pageSize);
       
       const response: ApiResponse<PaginatedResponse<TrainerWithDetails>> = {
@@ -379,6 +379,39 @@ export async function trainerRoutes(fastify: FastifyInstance) {
       const response: ApiResponse<null> = {
         success: false,
         error: 'Failed to remove class from trainer'
+      };
+      return reply.code(500).send(response);
+    }
+  });
+
+  // Get unassigned trainers (not freelance but no gym assigned)
+  fastify.get('/trainers/unassigned', async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      // Validate query parameters
+      const { page, pageSize, includeInactive, includeClasses } = trainerQuerySchema.parse(request.query);
+      
+      const { trainers, total } = await trainerService.getUnassignedTrainers(page, pageSize, includeInactive, includeClasses);
+      const totalPages = Math.ceil(total / pageSize);
+      
+      const response: ApiResponse<PaginatedResponse<TrainerWithDetails>> = {
+        success: true,
+        data: {
+          items: trainers,
+          total,
+          page,
+          pageSize,
+          totalPages
+        },
+        message: 'Unassigned trainers retrieved successfully'
+      };
+      return reply.code(200).send(response);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new ValidationError(`Query validation failed: ${formatZodError(error)}`);
+      }
+      const response: ApiResponse<null> = {
+        success: false,
+        error: 'Failed to retrieve unassigned trainers'
       };
       return reply.code(500).send(response);
     }

@@ -52,12 +52,14 @@ export interface CreateGymRequest extends Omit<NewGym, 'id' | 'created_at' | 'up
   // name_th, name_en are required
   // Other fields like description_th, description_en, phone, email, map_url, youtube_url, line are optional (text or nullable)
   tags?: Tag[];
+  associatedTrainers?: string[]; // Array of trainer IDs to associate with this gym
 }
 
 export interface UpdateGymRequest extends Partial<Omit<NewGym, 'id' | 'created_at' | 'updated_at'>> {
   // is_active can be updated, so not omitting it here explicitly
   // but typically handled by a dedicated activate/deactivate endpoint.
   tags?: Tag[];
+  associatedTrainers?: string[]; // Array of trainer IDs to associate with this gym
 }
 
 // For displaying a gym with its related details

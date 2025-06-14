@@ -54,7 +54,7 @@ function mapRawTrainerToTrainerWithDetails(
   return result;
 }
 
-export async function getAllTrainers(page: number = 1, pageSize: number = 20, searchTerm?: string, provinceId?: number, gymId?: string, isFreelance?: boolean, includeInactive: boolean = false, includeClasses: boolean = false): Promise<{ trainers: TrainerWithDetails[], total: number }> {
+export async function getAllTrainers(page: number = 1, pageSize: number = 20, searchTerm?: string, provinceId?: number, gymId?: string, isFreelance?: boolean, includeInactive: boolean = false, includeClasses: boolean = false, unassignedOnly: boolean = false): Promise<{ trainers: TrainerWithDetails[], total: number }> {
   const offset = (page - 1) * pageSize;
   const whereConditions: (SQL<unknown> | undefined)[] = [];
 
@@ -73,6 +73,12 @@ export async function getAllTrainers(page: number = 1, pageSize: number = 20, se
 
   if (isFreelance !== undefined) {
     whereConditions.push(eq(schema.trainers.is_freelance, isFreelance));
+  }
+
+  // Filter for unassigned trainers (not freelance but no gym assigned)
+  if (unassignedOnly) {
+    whereConditions.push(eq(schema.trainers.is_freelance, false));
+    whereConditions.push(sql`${schema.trainers.gym_id} IS NULL`);
   }
   
   if (searchTerm) {
@@ -263,15 +269,15 @@ export async function getTrainerById(id: string, includeInactive: boolean = fals
 }
 
 export async function getTrainersByGym(gymId: string, page: number = 1, pageSize: number = 20, includeInactive: boolean = false, includeClasses: boolean = false): Promise<{ trainers: TrainerWithDetails[], total: number }> {
-  return getAllTrainers(page, pageSize, undefined, undefined, gymId, undefined, includeInactive, includeClasses);
+  return getAllTrainers(page, pageSize, undefined, undefined, gymId, undefined, includeInactive, includeClasses, false);
 }
 
 export async function getTrainersByProvince(provinceId: number, page: number = 1, pageSize: number = 20, includeInactive: boolean = false, includeClasses: boolean = false): Promise<{ trainers: TrainerWithDetails[], total: number }> {
-  return getAllTrainers(page, pageSize, undefined, provinceId, undefined, undefined, includeInactive, includeClasses);
+  return getAllTrainers(page, pageSize, undefined, provinceId, undefined, undefined, includeInactive, includeClasses, false);
 }
 
 export async function getFreelanceTrainers(page: number = 1, pageSize: number = 20, includeInactive: boolean = false, includeClasses: boolean = false): Promise<{ trainers: TrainerWithDetails[], total: number }> {
-  return getAllTrainers(page, pageSize, undefined, undefined, undefined, true, includeInactive, includeClasses);
+  return getAllTrainers(page, pageSize, undefined, undefined, undefined, true, includeInactive, includeClasses, false);
 }
 
 export async function getTrainerClasses(trainerId: string): Promise<Class[]> {
@@ -317,6 +323,10 @@ export async function createTrainer(trainerData: CreateTrainerRequest): Promise<
       if (createdTrainer.gym_id) {
         const gym = await tx.select().from(schema.gyms).where(eq(schema.gyms.id, createdTrainer.gym_id));
         gymData = gym[0] || null;
+        
+        // Note: The bidirectional relationship is maintained through the database FK constraint
+        // and the gym service updates. When a gym updates its associatedTrainers, it sets
+        // trainers' gym_id. Here we just ensure consistency is maintained.
       }
       
       // Create tag associations if tags are provided
@@ -434,6 +444,10 @@ export async function updateTrainer(id: string, trainerData: UpdateTrainerReques
       if (trainer.gym_id) {
         const gym = await tx.select().from(schema.gyms).where(eq(schema.gyms.id, trainer.gym_id));
         gymData = gym[0] || null;
+        
+        // Note: The bidirectional relationship is maintained primarily through the gym service
+        // When a gym updates its associatedTrainers, it manages the trainers' gym_id
+        // Individual trainer updates just update their own gym_id field
       }
       
       // Handle tags update if provided
@@ -572,7 +586,12 @@ export async function searchTrainers(query: string, page: number = 1, pageSize: 
     return { trainers: [], total: 0 };
   }
   
-  return getAllTrainers(page, pageSize, query.trim(), undefined, undefined, undefined, false, includeClasses);
+  return getAllTrainers(page, pageSize, query.trim(), undefined, undefined, undefined, false, includeClasses, false);
+}
+
+// Add a new function specifically for getting unassigned trainers
+export async function getUnassignedTrainers(page: number = 1, pageSize: number = 20, includeInactive: boolean = false, includeClasses: boolean = false): Promise<{ trainers: TrainerWithDetails[], total: number }> {
+  return getAllTrainers(page, pageSize, undefined, undefined, undefined, undefined, includeInactive, includeClasses, true);
 }
 
 // --- Trainer Class Management Functions ---

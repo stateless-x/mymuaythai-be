@@ -12,7 +12,7 @@ import {
   Tag,
   Trainer
 } from '../types';
-import { eq, ilike, and, or, desc, sql, count, SQL } from 'drizzle-orm';
+import { eq, ilike, and, or, desc, sql, count, SQL, inArray } from 'drizzle-orm';
 import { createGymSchema, updateGymSchema, formatZodError } from '../utils/validation';
 import { z } from 'zod';
 
@@ -119,7 +119,7 @@ export async function getAllGyms(page: number = 1, pageSize: number = 10, search
       const gymTagsRecords = await db.select({ tag_id: schema.gymTags.tag_id }).from(schema.gymTags).where(eq(schema.gymTags.gym_id, g.id));
       const tagIds = gymTagsRecords.map(gt => gt.tag_id);
       const tags = tagIds.length > 0 
-        ? await db.select().from(schema.tags).where(sql`${schema.tags.id} IN ${tagIds}`)
+        ? await db.select().from(schema.tags).where(inArray(schema.tags.id, tagIds))
         : [];
 
       // Fetch associated trainers for this gym
@@ -173,7 +173,7 @@ export async function getGymById(id: string, includeInactive: boolean = false): 
   const gymTagsRecords = await db.select({ tag_id: schema.gymTags.tag_id }).from(schema.gymTags).where(eq(schema.gymTags.gym_id, id));
   const tagIds = gymTagsRecords.map(gt => gt.tag_id);
   const tags = tagIds.length > 0 
-    ? await db.select().from(schema.tags).where(sql`${schema.tags.id} IN ${tagIds}`)
+    ? await db.select().from(schema.tags).where(inArray(schema.tags.id, tagIds))
     : [];
 
   const associatedTrainers = await db.select().from(schema.trainers).where(eq(schema.trainers.gym_id, id));
@@ -218,7 +218,7 @@ export async function getGymsByProvince(provinceId: number): Promise<GymWithDeta
         const gymTagsRecords = await db.select({ tag_id: schema.gymTags.tag_id }).from(schema.gymTags).where(eq(schema.gymTags.gym_id, g.id));
         const tagIds = gymTagsRecords.map(gt => gt.tag_id);
         const tags = tagIds.length > 0 
-          ? await db.select().from(schema.tags).where(sql`${schema.tags.id} IN ${tagIds}`)
+          ? await db.select().from(schema.tags).where(inArray(schema.tags.id, tagIds))
           : [];
 
         // Fetch associated trainers for this gym
@@ -233,8 +233,8 @@ export async function createGym(gymData: CreateGymRequest): Promise<GymWithDetai
   try {
     const validatedData = createGymSchema.parse(gymData);
     
-    // Extract tags from validated data if present
-    const { tags, ...gymFields } = validatedData as any;
+    // Extract tags and associatedTrainers from validated data if present
+    const { tags, associatedTrainers, ...gymFields } = validatedData as any;
     
     const result = await db.transaction(async (tx) => {
       // Create the gym
@@ -269,13 +269,24 @@ export async function createGym(gymData: CreateGymRequest): Promise<GymWithDetai
         gymTags = tags;
       }
       
+      // Handle associatedTrainers - update trainers' gym_id to establish bidirectional relationship
+      let associatedTrainersData: Trainer[] = [];
+      if (associatedTrainers && associatedTrainers.length > 0) {
+        // Update trainers to associate them with this gym
+        await tx.update(schema.trainers)
+          .set({ gym_id: createdGym.id, updated_at: new Date() })
+          .where(inArray(schema.trainers.id, associatedTrainers));
+        
+        // Fetch the updated trainer data
+        associatedTrainersData = await tx.select()
+          .from(schema.trainers)
+          .where(inArray(schema.trainers.id, associatedTrainers));
+      }
+      
       // Fetch images (will be empty for new gym)
       const images = await tx.select().from(schema.gymImages).where(eq(schema.gymImages.gym_id, createdGym.id));
       
-      // Fetch associated trainers (will be empty for new gym)
-      const associatedTrainers = await tx.select().from(schema.trainers).where(eq(schema.trainers.gym_id, createdGym.id));
-      
-      return mapRawGymToGymWithDetails(createdGym, provinceData, images, gymTags, associatedTrainers);
+      return mapRawGymToGymWithDetails(createdGym, provinceData, images, gymTags, associatedTrainersData);
     });
     
     return result;
@@ -291,8 +302,8 @@ export async function updateGym(id: string, gymData: UpdateGymRequest): Promise<
   try {
     const validatedData = updateGymSchema.parse(gymData);
     
-    // Extract tags from validated data if present
-    const { tags, ...gymFields } = validatedData as any;
+    // Extract tags and associatedTrainers from validated data if present
+    const { tags, associatedTrainers, ...gymFields } = validatedData as any;
     
     const result = await db.transaction(async (tx) => {
       let updatedGym: Gym[] = [];
@@ -349,20 +360,54 @@ export async function updateGym(id: string, gymData: UpdateGymRequest): Promise<
         }
       }
       
+      // Handle associatedTrainers update if provided
+      if (associatedTrainers !== undefined) {
+        console.log("=== UPDATING GYM ASSOCIATED TRAINERS ===");
+        console.log("Gym ID:", id);
+        console.log("Received associatedTrainers array:", associatedTrainers);
+        console.log("Number of trainers to associate:", associatedTrainers.length);
+        
+        // First, get current trainers associated with this gym
+        const currentTrainers = await tx.select().from(schema.trainers).where(eq(schema.trainers.gym_id, id));
+        console.log("Current trainers before update:", currentTrainers.map(t => `${t.first_name_th} ${t.last_name_th} (${t.id})`));
+        
+        // First, remove gym association from trainers currently associated with this gym
+        console.log("Removing gym association from all current trainers...");
+        await tx.update(schema.trainers)
+          .set({ gym_id: null, updated_at: new Date() })
+          .where(eq(schema.trainers.gym_id, id));
+        
+        // Then, associate new trainers with this gym
+        if (associatedTrainers.length > 0) {
+          console.log("Associating new trainers with gym:", associatedTrainers);
+          await tx.update(schema.trainers)
+            .set({ gym_id: id, updated_at: new Date() })
+            .where(inArray(schema.trainers.id, associatedTrainers));
+          
+          // Verify the update
+          const updatedTrainers = await tx.select().from(schema.trainers).where(eq(schema.trainers.gym_id, id));
+          console.log("Trainers after update:", updatedTrainers.map(t => `${t.first_name_th} ${t.last_name_th} (${t.id})`));
+        } else {
+          console.log("No trainers to associate - all trainers removed from gym");
+        }
+        
+        console.log("=== GYM TRAINER UPDATE COMPLETE ===");
+      }
+      
       // Fetch current tags
       const gymTagsRecords = await tx.select({ tag_id: schema.gymTags.tag_id }).from(schema.gymTags).where(eq(schema.gymTags.gym_id, id));
       const tagIds = gymTagsRecords.map(gt => gt.tag_id);
       const currentTags = tagIds.length > 0 
-        ? await tx.select().from(schema.tags).where(sql`${schema.tags.id} IN ${tagIds}`)
+        ? await tx.select().from(schema.tags).where(inArray(schema.tags.id, tagIds))
         : [];
       
       // Fetch images
       const images = await tx.select().from(schema.gymImages).where(eq(schema.gymImages.gym_id, id));
       
       // Fetch associated trainers
-      const associatedTrainers = await tx.select().from(schema.trainers).where(eq(schema.trainers.gym_id, id));
+      const associatedTrainersData = await tx.select().from(schema.trainers).where(eq(schema.trainers.gym_id, id));
       
-      return mapRawGymToGymWithDetails(gym, provinceData, images, currentTags, associatedTrainers);
+      return mapRawGymToGymWithDetails(gym, provinceData, images, currentTags, associatedTrainersData);
     });
     
     return result;
