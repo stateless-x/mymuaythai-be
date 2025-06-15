@@ -12,7 +12,7 @@ import {
   Tag,
   Trainer
 } from '../types';
-import { eq, ilike, and, or, desc, sql, count, SQL, inArray } from 'drizzle-orm';
+import { eq, ilike, and, or, desc, sql, count, SQL, inArray, asc } from 'drizzle-orm';
 import { createGymSchema, updateGymSchema, formatZodError } from '../utils/validation';
 import { z } from 'zod';
 
@@ -46,13 +46,32 @@ function mapRawGymToGymWithDetails(rawGymData: any, provinceData: Province | nul
   return result;
 }
 
-export async function getAllGyms(page: number = 1, pageSize: number = 10, searchTerm?: string, provinceId?: number, includeInactive: boolean = false, includeAssociatedTrainers: boolean = false): Promise<{ gyms: GymWithDetails[], total: number }> {
+export async function getAllGyms(params: {
+  page?: number, 
+  pageSize?: number, 
+  searchTerm?: string, 
+  provinceId?: number, 
+  is_active?: boolean,
+  sortField?: 'created_at' | 'updated_at',
+  sortBy?: 'asc' | 'desc',
+  includeAssociatedTrainers?: boolean
+} = {}): Promise<{ gyms: GymWithDetails[], total: number }> {
+  const {
+    page = 1,
+    pageSize = 10,
+    searchTerm,
+    provinceId,
+    is_active,
+    sortField = 'created_at',
+    sortBy = 'desc',
+    includeAssociatedTrainers = false
+  } = params;
+  
   const offset = (page - 1) * pageSize;
   const whereConditions: (SQL<unknown> | undefined)[] = [];
 
-  // Only filter by is_active if includeInactive is false (default behavior for public)
-  if (!includeInactive) {
-    whereConditions.push(eq(schema.gyms.is_active, true));
+  if (is_active !== undefined) {
+    whereConditions.push(eq(schema.gyms.is_active, is_active));
   }
 
   if (provinceId) {
@@ -75,6 +94,10 @@ export async function getAllGyms(page: number = 1, pageSize: number = 10, search
 
   const validWhereConditions = whereConditions.filter(c => c !== undefined) as SQL<unknown>[];
 
+  const sortColumn = sortField === 'updated_at' 
+    ? schema.gyms.updated_at
+    : schema.gyms.created_at;
+
   const gymsQuery = db.select({
       id: schema.gyms.id,
       name_th: schema.gyms.name_th,
@@ -95,7 +118,7 @@ export async function getAllGyms(page: number = 1, pageSize: number = 10, search
     .from(schema.gyms)
     .leftJoin(schema.provinces, eq(schema.gyms.province_id, schema.provinces.id))
     .where(validWhereConditions.length > 0 ? and(...validWhereConditions) : undefined)
-    .orderBy(desc(schema.gyms.created_at))
+    .orderBy(sortBy === 'asc' ? asc(sortColumn) : desc(sortColumn))
     .limit(pageSize)
     .offset(offset);
 
@@ -225,282 +248,167 @@ export async function getGymImages(gymId: string): Promise<GymImage[]> {
 }
 
 export async function getGymsByProvince(provinceId: number): Promise<GymWithDetails[]> {
-   const gymsResult = await db.select({
-      id: schema.gyms.id,
-      name_th: schema.gyms.name_th,
-      name_en: schema.gyms.name_en,
-      description_th: schema.gyms.description_th,
-      description_en: schema.gyms.description_en,
-      phone: schema.gyms.phone,
-      email: schema.gyms.email,
-      province_id: schema.gyms.province_id,
-      map_url: schema.gyms.map_url,
-      youtube_url: schema.gyms.youtube_url,
-      line_id: schema.gyms.line_id,
-      is_active: schema.gyms.is_active,
-      created_at: schema.gyms.created_at,
-      updated_at: schema.gyms.updated_at,
-      provinceData: schema.provinces
-    })
-    .from(schema.gyms)
-    .leftJoin(schema.provinces, eq(schema.gyms.province_id, schema.provinces.id))
-    .where(and(eq(schema.gyms.province_id, provinceId), eq(schema.gyms.is_active, true)))
-    .orderBy(desc(schema.gyms.created_at));
-
-    // Fetch additional details for each gym
-    return Promise.all(
-      gymsResult.map(async (g) => {
-        // Fetch images for this gym
-        const images = await db.select().from(schema.gymImages).where(eq(schema.gymImages.gym_id, g.id));
-        
-        // Fetch tags for this gym
-        const gymTagsRecords = await db.select({ tag_id: schema.gymTags.tag_id }).from(schema.gymTags).where(eq(schema.gymTags.gym_id, g.id));
-        const tagIds = gymTagsRecords.map(gt => gt.tag_id);
-        const tags = tagIds.length > 0 
-          ? await db.select().from(schema.tags).where(inArray(schema.tags.id, tagIds))
-          : [];
-
-        // Fetch associated trainers for this gym
-        const associatedTrainers = await db.select().from(schema.trainers).where(eq(schema.trainers.gym_id, g.id));
-
-        return mapRawGymToGymWithDetails(g, g.provinceData as Province | null, images, tags, associatedTrainers);
-      })
-    );
+   const gymsResult = await getAllGyms({ provinceId: provinceId, pageSize: 100 }); // Use getAllGyms
+   return gymsResult.gyms;
 }
 
 export async function createGym(gymData: CreateGymRequest): Promise<GymWithDetails> {
-  try {
-    const validatedData = createGymSchema.parse(gymData);
-    
-    // Extract tags and associatedTrainers from validated data if present
-    const { tags, associatedTrainers, ...gymFields } = validatedData as any;
-    
-    const result = await db.transaction(async (tx) => {
-      // Create the gym
-      const newGym = await tx.insert(schema.gyms)
-        .values(gymFields as NewGym)
-        .returning();
-      
-      if (!newGym || newGym.length === 0) {
-        throw new Error('Gym creation failed, no data returned.');
-      }
-      
-      const createdGym = newGym[0]!;
-      
-      // Fetch province data if province_id exists
-      let provinceData: Province | null = null;
-      if (createdGym.province_id) {
-        const province = await tx.select().from(schema.provinces).where(eq(schema.provinces.id, createdGym.province_id));
-        provinceData = province[0] || null;
-      }
-      
-      // Create tag associations if tags are provided
-      let gymTags: Tag[] = [];
-      if (tags && tags.length > 0) {
-        const gymTagsToInsert = tags.map((tag: any) => ({
-          gym_id: createdGym.id,
-          tag_id: tag.id,
-        }));
-        
-        await tx.insert(schema.gymTags)
-          .values(gymTagsToInsert);
-        
-        gymTags = tags;
-      }
-      
-      // Handle associatedTrainers - update trainers' gym_id to establish bidirectional relationship
-      let associatedTrainersData: Trainer[] = [];
-      if (associatedTrainers && associatedTrainers.length > 0) {
-        // Update trainers to associate them with this gym
-        await tx.update(schema.trainers)
-          .set({ gym_id: createdGym.id, updated_at: new Date() })
-          .where(inArray(schema.trainers.id, associatedTrainers));
-        
-        // Fetch the updated trainer data
-        associatedTrainersData = await tx.select()
-          .from(schema.trainers)
-          .where(inArray(schema.trainers.id, associatedTrainers));
-      }
-      
-      // Fetch images (will be empty for new gym)
-      const images = await tx.select().from(schema.gymImages).where(eq(schema.gymImages.gym_id, createdGym.id));
-      
-      return mapRawGymToGymWithDetails(createdGym, provinceData, images, gymTags, associatedTrainersData);
-    });
-    
-    return result;
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      throw new Error(`Validation failed: ${formatZodError(error)}`);
-    }
-    throw error;
+  const validationResult = createGymSchema.safeParse(gymData);
+  if (!validationResult.success) {
+    throw new Error(formatZodError(validationResult.error));
   }
+
+  const { tags: tagObjects, images: imageUrls, associatedTrainers: trainerIds, ...gymDetails } = validationResult.data;
+
+  return await db.transaction(async (tx) => {
+    const newGyms = await tx.insert(schema.gyms).values(gymDetails).returning();
+    const newGym = newGyms[0];
+    if (!newGym) {
+      tx.rollback();
+      throw new Error("Failed to create gym.");
+    }
+
+    let createdTags: Tag[] = [];
+    if (tagObjects && tagObjects.length > 0) {
+        const tagNames = tagObjects.map(t => t.name_en);
+        const existingTags = await tx.select().from(schema.tags).where(inArray(schema.tags.name_en, tagNames));
+        const existingTagNames = new Set(existingTags.map(t => t.name_en));
+        const newTagObjects = tagObjects.filter(t => !existingTagNames.has(t.name_en));
+
+        let newTags: Tag[] = [];
+        if (newTagObjects.length > 0) {
+            newTags = await tx.insert(schema.tags).values(newTagObjects.map(t => ({name_en: t.name_en, name_th: t.name_th || t.name_en}))).returning();
+        }
+        createdTags = [...existingTags, ...newTags];
+
+        if (createdTags.length > 0) {
+            await tx.insert(schema.gymTags).values(createdTags.map(tag => ({
+                gym_id: newGym.id,
+                tag_id: tag.id
+            })));
+        }
+    }
+
+    let createdImages: GymImage[] = [];
+    if (imageUrls && imageUrls.length > 0) {
+      createdImages = await tx.insert(schema.gymImages).values(imageUrls.map((img: any) => ({
+        gym_id: newGym.id,
+        image_url: img.image_url
+      }))).returning();
+    }
+    
+    let associatedTrainers: Trainer[] = [];
+    if (trainerIds && trainerIds.length > 0) {
+        await tx.update(schema.trainers).set({ gym_id: newGym.id }).where(inArray(schema.trainers.id, trainerIds));
+        associatedTrainers = await tx.select().from(schema.trainers).where(inArray(schema.trainers.id, trainerIds));
+    }
+
+    const provinceData = newGym.province_id 
+      ? await tx.query.provinces.findFirst({ where: eq(schema.provinces.id, newGym.province_id) })
+      : null;
+
+    return mapRawGymToGymWithDetails(newGym, provinceData || null, createdImages, createdTags, associatedTrainers);
+  });
 }
 
 export async function updateGym(id: string, gymData: UpdateGymRequest): Promise<GymWithDetails | null> {
-  try {
-    const validatedData = updateGymSchema.parse(gymData);
+    const validationResult = updateGymSchema.safeParse(gymData);
+    if (!validationResult.success) {
+      throw new Error(formatZodError(validationResult.error));
+    }
     
-    // Extract tags and associatedTrainers from validated data if present
-    const { tags, associatedTrainers, ...gymFields } = validatedData as any;
-    
-    const result = await db.transaction(async (tx) => {
-      let updatedGym: Gym[] = [];
-      
-      // Update the main gym fields only if there are fields to update
-      if (Object.keys(gymFields).length > 0) {
-        updatedGym = await tx.update(schema.gyms)
-          .set({
-            ...gymFields as Partial<NewGym>,
-            updated_at: new Date(),
-          })
-          .where(eq(schema.gyms.id, id))
-          .returning();
-        
-        if (!updatedGym || updatedGym.length === 0) {
-          return null;
+    const { tags: tagObjects, images: imageUrls, associatedTrainers: trainerIds, ...gymDetails } = validationResult.data;
+  
+    return await db.transaction(async (tx) => {
+      const updatedGyms = Object.keys(gymDetails).length > 0
+        ? await tx.update(schema.gyms).set({ ...gymDetails, updated_at: new Date() }).where(eq(schema.gyms.id, id)).returning()
+        : await tx.select().from(schema.gyms).where(eq(schema.gyms.id, id));
+  
+      const updatedGym = updatedGyms[0];
+      if (!updatedGym) {
+        return null;
+      }
+  
+      let finalTags: Tag[] = [];
+      if (tagObjects) {
+        await tx.delete(schema.gymTags).where(eq(schema.gymTags.gym_id, id));
+  
+        if (tagObjects.length > 0) {
+          const tagNames = tagObjects.map(t => t.name_en);
+          const existingTags = await tx.select().from(schema.tags).where(inArray(schema.tags.name_en, tagNames));
+          const existingTagNames = new Set(existingTags.map(t => t.name_en));
+          const newTagObjects = tagObjects.filter(t => !existingTagNames.has(t.name_en));
+
+          let newTags: Tag[] = [];
+          if (newTagObjects.length > 0) {
+              newTags = await tx.insert(schema.tags).values(newTagObjects.map(t => ({name_en: t.name_en, name_th: t.name_th || t.name_en}))).returning();
+          }
+          finalTags = [...existingTags, ...newTags];
+  
+          if (finalTags.length > 0) {
+            await tx.insert(schema.gymTags).values(finalTags.map(tag => ({
+              gym_id: id,
+              tag_id: tag.id
+            })));
+          }
         }
       } else {
-        // If no gym fields to update, just fetch the current gym
-        const currentGym = await tx.select()
-          .from(schema.gyms)
-          .where(eq(schema.gyms.id, id));
-        
-        if (!currentGym || currentGym.length === 0) {
-          return null;
-        }
-        updatedGym = currentGym;
+          const gymTagsRecords = await tx.select({ tag_id: schema.gymTags.tag_id }).from(schema.gymTags).where(eq(schema.gymTags.gym_id, id));
+          const tagIds = gymTagsRecords.map(gt => gt.tag_id);
+          if (tagIds.length > 0) {
+              finalTags = await tx.select().from(schema.tags).where(inArray(schema.tags.id, tagIds));
+          }
       }
-      
-      const gym = updatedGym[0]!;
-      
-      // Fetch province data if province_id exists
-      let provinceData: Province | null = null;
-      if (gym.province_id) {
-        const province = await tx.select().from(schema.provinces).where(eq(schema.provinces.id, gym.province_id));
-        provinceData = province[0] || null;
-      }
-      
-      // Handle tags update if provided
-      if (tags) {
-        // First, delete existing gym tag associations
-        await tx.delete(schema.gymTags)
-          .where(eq(schema.gymTags.gym_id, id));
-        
-        // Then, insert new tag associations
-        if (tags.length > 0) {
-          const gymTagsToInsert = tags.map((tag: any) => ({
+  
+      let finalImages: GymImage[] = [];
+      if (imageUrls) {
+        await tx.delete(schema.gymImages).where(eq(schema.gymImages.gym_id, id));
+        if (imageUrls.length > 0) {
+          finalImages = await tx.insert(schema.gymImages).values(imageUrls.map((img: any) => ({
             gym_id: id,
-            tag_id: tag.id,
-          }));
-          
-          await tx.insert(schema.gymTags)
-            .values(gymTagsToInsert);
+            image_url: img.image_url
+          }))).returning();
         }
+      } else {
+          finalImages = await tx.select().from(schema.gymImages).where(eq(schema.gymImages.gym_id, id));
       }
       
-      // Handle associatedTrainers update if provided
-      if (associatedTrainers !== undefined) {
-        // First, get current trainers associated with this gym
-        const currentTrainers = await tx.select().from(schema.trainers).where(eq(schema.trainers.gym_id, id));
-        
-        // First, remove gym association from trainers currently associated with this gym
-        await tx.update(schema.trainers)
-          .set({ gym_id: null, updated_at: new Date() })
-          .where(eq(schema.trainers.gym_id, id));
-        
-        // Then, associate new trainers with this gym
-        if (associatedTrainers.length > 0) {
-          await tx.update(schema.trainers)
-            .set({ gym_id: id, updated_at: new Date() })
-            .where(inArray(schema.trainers.id, associatedTrainers));
-          
-          // Verify the update
-          const updatedTrainers = await tx.select().from(schema.trainers).where(eq(schema.trainers.gym_id, id));
-        }
+      let finalTrainers: Trainer[] = [];
+      if (trainerIds) {
+          // Dissociate all trainers currently with the gym
+          await tx.update(schema.trainers).set({ gym_id: null }).where(eq(schema.trainers.gym_id, id));
+          // Associate the new list of trainers
+          if (trainerIds.length > 0) {
+            await tx.update(schema.trainers).set({ gym_id: id }).where(inArray(schema.trainers.id, trainerIds));
+          }
+          finalTrainers = await tx.select().from(schema.trainers).where(eq(schema.trainers.gym_id, id));
+      } else {
+          finalTrainers = await tx.select().from(schema.trainers).where(eq(schema.trainers.gym_id, id));
       }
-      
-      // Fetch current tags
-      const gymTagsRecords = await tx.select({ tag_id: schema.gymTags.tag_id }).from(schema.gymTags).where(eq(schema.gymTags.gym_id, id));
-      const tagIds = gymTagsRecords.map(gt => gt.tag_id);
-      const currentTags = tagIds.length > 0 
-        ? await tx.select().from(schema.tags).where(inArray(schema.tags.id, tagIds))
-        : [];
-      
-      // Fetch images
-      const images = await tx.select().from(schema.gymImages).where(eq(schema.gymImages.gym_id, id));
-      
-      // Fetch associated trainers
-      const associatedTrainersData = await tx.select().from(schema.trainers).where(eq(schema.trainers.gym_id, id));
-      
-      return mapRawGymToGymWithDetails(gym, provinceData, images, currentTags, associatedTrainersData);
+  
+      const provinceData = updatedGym.province_id 
+        ? await tx.query.provinces.findFirst({ where: eq(schema.provinces.id, updatedGym.province_id) })
+        : null;
+        
+      return mapRawGymToGymWithDetails(updatedGym, provinceData || null, finalImages, finalTags, finalTrainers);
     });
-    
-    return result;
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      throw new Error(`Validation failed: ${formatZodError(error)}`);
-    }
-    throw error;
-  }
 }
-
+  
 export async function deleteGym(id: string): Promise<boolean> {
-  try {
-    // Start a transaction to ensure data consistency
-    const result = await db.transaction(async (tx) => {
-      // First, delete all related gym images
-      await tx.delete(schema.gymImages)
-        .where(eq(schema.gymImages.gym_id, id));
-      
-      // Delete all gym tags associations
-      await tx.delete(schema.gymTags)
-        .where(eq(schema.gymTags.gym_id, id));
-      
-      // Update trainers to remove gym association (set gym_id to null)
-      await tx.update(schema.trainers)
-        .set({ gym_id: null })
-        .where(eq(schema.trainers.gym_id, id));
-      
-      // Finally, delete the gym itself
-      const deletedGym = await tx.delete(schema.gyms)
-        .where(eq(schema.gyms.id, id))
-        .returning();
-      
-      return deletedGym;
-    });
-    
-    return result.length > 0;
-  } catch (error) {
-    console.error('Error deleting gym:', error);
-    return false;
-  }
+  const result = await db.update(schema.gyms)
+    .set({ is_active: false, updated_at: new Date() })
+    .where(eq(schema.gyms.id, id));
+  
+  return result.rowCount > 0;
 }
 
 export async function addGymImage(gymId: string, imageUrl: string): Promise<GymImage> {
-  const result = await db.insert(schema.gymImages)
-    .values({ gym_id: gymId, image_url: imageUrl } as NewGymImage)
-    .returning();
-  
-  if (!result || result.length === 0) {
-    throw new Error('Image addition failed, no data returned.');
-  }
-  
-  return result[0]!;
+    const newImage: NewGymImage = { gym_id: gymId, image_url: imageUrl };
+    const result = await db.insert(schema.gymImages).values(newImage).returning();
+    return result[0];
 }
 
 export async function removeGymImage(imageId: string): Promise<boolean> {
-  const result = await db.delete(schema.gymImages)
-    .where(eq(schema.gymImages.id, imageId))
-    .returning();
-  
-  return result.length > 0;
-}
-
-export async function searchGyms(searchTerm: string, page: number = 1, pageSize: number = 10): Promise<{ gyms: GymWithDetails[], total: number }> {
-  if (!searchTerm?.trim()) {
-    return { gyms: [], total: 0 };
-  }
-
-  return getAllGyms(page, pageSize, searchTerm.trim());
+    const result = await db.delete(schema.gymImages).where(eq(schema.gymImages.id, imageId));
+    return result.rowCount > 0;
 } 

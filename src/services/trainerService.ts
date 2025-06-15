@@ -15,7 +15,7 @@ import {
   Tag,
   NewTrainerClass
 } from '../types';
-import { eq, ilike, and, or, desc, sql, count, SQL, inArray } from 'drizzle-orm';
+import { eq, ilike, and, or, desc, sql, count, SQL, inArray, asc } from 'drizzle-orm';
 
 // Helper function to map raw trainer data to TrainerWithDetails
 function mapRawTrainerToTrainerWithDetails(
@@ -54,13 +54,24 @@ function mapRawTrainerToTrainerWithDetails(
   return result;
 }
 
-export async function getAllTrainers(page: number = 1, pageSize: number = 20, searchTerm?: string, provinceId?: number, gymId?: string, isFreelance?: boolean, includeInactive: boolean = false, includeClasses: boolean = false, unassignedOnly: boolean = false): Promise<{ trainers: TrainerWithDetails[], total: number }> {
+export async function getAllTrainers(
+  page: number = 1, 
+  pageSize: number = 20, 
+  searchTerm?: string, 
+  provinceId?: number, 
+  gymId?: string, 
+  isFreelance?: boolean, 
+  isActive?: boolean,
+  sortField: 'created_at' | 'updated_at' = 'created_at',
+  sortBy: 'asc' | 'desc' = 'desc',
+  includeClasses: boolean = false, 
+  unassignedOnly: boolean = false
+): Promise<{ trainers: TrainerWithDetails[], total: number }> {
   const offset = (page - 1) * pageSize;
   const whereConditions: (SQL<unknown> | undefined)[] = [];
 
-  // Only filter by is_active if includeInactive is false (default behavior for public)
-  if (!includeInactive) {
-    whereConditions.push(eq(schema.trainers.is_active, true));
+  if (isActive !== undefined) {
+    whereConditions.push(eq(schema.trainers.is_active, isActive));
   }
 
   if (provinceId) {
@@ -101,6 +112,10 @@ export async function getAllTrainers(page: number = 1, pageSize: number = 20, se
 
   const validWhereConditions = whereConditions.filter(c => c !== undefined) as SQL<unknown>[];
 
+  const sortColumn = sortField === 'updated_at' 
+    ? schema.trainers.updated_at 
+    : schema.trainers.created_at;
+
   const trainersQuery = db.select({
     id: schema.trainers.id,
     first_name_th: schema.trainers.first_name_th,
@@ -125,7 +140,7 @@ export async function getAllTrainers(page: number = 1, pageSize: number = 20, se
   .leftJoin(schema.provinces, eq(schema.trainers.province_id, schema.provinces.id))
   .leftJoin(schema.gyms, eq(schema.trainers.gym_id, schema.gyms.id))
   .where(validWhereConditions.length > 0 ? and(...validWhereConditions) : undefined)
-  .orderBy(desc(schema.trainers.created_at))
+  .orderBy(sortBy === 'asc' ? asc(sortColumn) : desc(sortColumn))
   .limit(pageSize)
   .offset(offset);
 
@@ -270,15 +285,15 @@ export async function getTrainerById(id: string, includeInactive: boolean = fals
 }
 
 export async function getTrainersByGym(gymId: string, page: number = 1, pageSize: number = 20, includeInactive: boolean = false, includeClasses: boolean = false): Promise<{ trainers: TrainerWithDetails[], total: number }> {
-  return getAllTrainers(page, pageSize, undefined, undefined, gymId, undefined, includeInactive, includeClasses, false);
+  return getAllTrainers(page, pageSize, undefined, undefined, gymId, undefined, !includeInactive ? true : undefined, 'created_at', 'desc', includeClasses, false);
 }
 
 export async function getTrainersByProvince(provinceId: number, page: number = 1, pageSize: number = 20, includeInactive: boolean = false, includeClasses: boolean = false): Promise<{ trainers: TrainerWithDetails[], total: number }> {
-  return getAllTrainers(page, pageSize, undefined, provinceId, undefined, undefined, includeInactive, includeClasses, false);
+  return getAllTrainers(page, pageSize, undefined, provinceId, undefined, undefined, !includeInactive ? true : undefined, 'created_at', 'desc', includeClasses, false);
 }
 
 export async function getFreelanceTrainers(page: number = 1, pageSize: number = 20, includeInactive: boolean = false, includeClasses: boolean = false): Promise<{ trainers: TrainerWithDetails[], total: number }> {
-  return getAllTrainers(page, pageSize, undefined, undefined, undefined, true, includeInactive, includeClasses, false);
+  return getAllTrainers(page, pageSize, undefined, undefined, undefined, true, !includeInactive ? true : undefined, 'created_at', 'desc', includeClasses, false);
 }
 
 export async function getTrainerClasses(trainerId: string): Promise<Class[]> {
@@ -602,12 +617,12 @@ export async function searchTrainers(query: string, page: number = 1, pageSize: 
     return { trainers: [], total: 0 };
   }
   
-  return getAllTrainers(page, pageSize, query.trim(), undefined, undefined, undefined, false, includeClasses, false);
+  return getAllTrainers(page, pageSize, query.trim(), undefined, undefined, undefined, true, 'created_at', 'desc', includeClasses, false);
 }
 
 // Add a new function specifically for getting unassigned trainers
 export async function getUnassignedTrainers(page: number = 1, pageSize: number = 20, includeInactive: boolean = false, includeClasses: boolean = false): Promise<{ trainers: TrainerWithDetails[], total: number }> {
-  return getAllTrainers(page, pageSize, undefined, undefined, undefined, undefined, includeInactive, includeClasses, true);
+  return getAllTrainers(page, pageSize, undefined, undefined, undefined, undefined, !includeInactive ? true : undefined, 'created_at', 'desc', includeClasses, true);
 }
 
 // --- Trainer Class Management Functions ---
