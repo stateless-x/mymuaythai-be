@@ -75,7 +75,7 @@ export async function getAllTrainers(page: number = 1, pageSize: number = 20, se
     whereConditions.push(eq(schema.trainers.is_freelance, isFreelance));
   }
 
-  // Filter for unassigned trainers (not freelance but no gym assigned)
+  // Optimized: Handle unassigned trainers filtering at database level
   if (unassignedOnly) {
     whereConditions.push(eq(schema.trainers.is_freelance, false));
     whereConditions.push(sql`${schema.trainers.gym_id} IS NULL`);
@@ -140,12 +140,13 @@ export async function getAllTrainers(page: number = 1, pageSize: number = 20, se
   const totalResult = await totalQuery;
   const total = totalResult[0]?.value ?? 0;
 
-  // Fetch classes for each trainer if includeClasses is true (for admin)
+  // Optimized: Only fetch classes when needed and for specific use cases
   const trainersWithDetailsList: TrainerWithDetails[] = [];
   
   for (const trainer of trainersResult) {
     let classes: TrainerClassWithDetails[] = [];
     
+    // Only load classes if explicitly requested (for admin views)
     if (includeClasses) {
       // Get trainer's detailed class info (including both standard and private classes)
       const trainerClassesDetailed = await db.select()
@@ -544,12 +545,27 @@ export async function updateTrainer(id: string, trainerData: UpdateTrainerReques
 }
 
 export async function deleteTrainer(id: string): Promise<boolean> {
-  const result = await db.update(schema.trainers)
-    .set({ is_active: false })
-    .where(eq(schema.trainers.id, id))
-    .returning();
-  
-  return result.length > 0;
+  try {
+    const result = await db.transaction(async (tx) => {
+      // Delete associations first to avoid foreign key constraint violations
+      await tx.delete(schema.trainerTags)
+        .where(eq(schema.trainerTags.trainer_id, id));
+        
+      await tx.delete(schema.trainerClasses)
+        .where(eq(schema.trainerClasses.trainer_id, id));
+
+      // Then delete the trainer itself
+      const deletedTrainer = await tx.delete(schema.trainers)
+        .where(eq(schema.trainers.id, id))
+        .returning();
+      
+      return deletedTrainer.length > 0;
+    });
+    return result;
+  } catch (error) {
+    console.error(`Failed to delete trainer with id ${id}:`, error);
+    return false;
+  }
 }
 
 export async function addTrainerClass(trainerId: string, classId: string): Promise<boolean> {

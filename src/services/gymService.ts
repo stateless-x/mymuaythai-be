@@ -46,7 +46,7 @@ function mapRawGymToGymWithDetails(rawGymData: any, provinceData: Province | nul
   return result;
 }
 
-export async function getAllGyms(page: number = 1, pageSize: number = 10, searchTerm?: string, provinceId?: number, includeInactive: boolean = false): Promise<{ gyms: GymWithDetails[], total: number }> {
+export async function getAllGyms(page: number = 1, pageSize: number = 10, searchTerm?: string, provinceId?: number, includeInactive: boolean = false, includeAssociatedTrainers: boolean = false): Promise<{ gyms: GymWithDetails[], total: number }> {
   const offset = (page - 1) * pageSize;
   const whereConditions: (SQL<unknown> | undefined)[] = [];
 
@@ -109,25 +109,64 @@ export async function getAllGyms(page: number = 1, pageSize: number = 10, search
   const totalResult = await totalQuery;
   const total = totalResult[0]?.value ?? 0;
 
-  // Fetch additional details for each gym
-  const gymsWithDetailsList: GymWithDetails[] = await Promise.all(
-    gymsResult.map(async (g) => {
-      // Fetch images for this gym
-      const images = await db.select().from(schema.gymImages).where(eq(schema.gymImages.gym_id, g.id));
-      
-      // Fetch tags for this gym
-      const gymTagsRecords = await db.select({ tag_id: schema.gymTags.tag_id }).from(schema.gymTags).where(eq(schema.gymTags.gym_id, g.id));
-      const tagIds = gymTagsRecords.map(gt => gt.tag_id);
-      const tags = tagIds.length > 0 
-        ? await db.select().from(schema.tags).where(inArray(schema.tags.id, tagIds))
-        : [];
+  // Optimized: Batch fetch all related data instead of individual queries
+  const gymIds = gymsResult.map(g => g.id);
+  
+  // Batch fetch images for all gyms
+  const allImages = gymIds.length > 0 ? 
+    await db.select().from(schema.gymImages).where(inArray(schema.gymImages.gym_id, gymIds)) : [];
+  
+  // Batch fetch gym-tag associations
+  const allGymTags = gymIds.length > 0 ?
+    await db.select({ gym_id: schema.gymTags.gym_id, tag_id: schema.gymTags.tag_id })
+      .from(schema.gymTags).where(inArray(schema.gymTags.gym_id, gymIds)) : [];
+  
+  // Batch fetch tags
+  const tagIds = [...new Set(allGymTags.map(gt => gt.tag_id))];
+  const allTags = tagIds.length > 0 ? 
+    await db.select().from(schema.tags).where(inArray(schema.tags.id, tagIds)) : [];
+  
+  // Batch fetch associated trainers if needed
+  const allTrainers = (includeAssociatedTrainers && gymIds.length > 0) ?
+    await db.select().from(schema.trainers).where(inArray(schema.trainers.gym_id, gymIds)) : [];
 
-      // Fetch associated trainers for this gym
-      const associatedTrainers = await db.select().from(schema.trainers).where(eq(schema.trainers.gym_id, g.id));
+  // Create lookup maps for efficient access
+  const imagesByGym = new Map<string, GymImage[]>();
+  allImages.forEach(img => {
+    if (!imagesByGym.has(img.gym_id)) {
+      imagesByGym.set(img.gym_id, []);
+    }
+    imagesByGym.get(img.gym_id)!.push(img);
+  });
 
-      return mapRawGymToGymWithDetails(g, g.provinceData as Province | null, images, tags, associatedTrainers);
-    })
-  );
+  const tagsByGym = new Map<string, Tag[]>();
+  const tagsMap = new Map(allTags.map(tag => [tag.id, tag]));
+  allGymTags.forEach(gt => {
+    if (!tagsByGym.has(gt.gym_id)) {
+      tagsByGym.set(gt.gym_id, []);
+    }
+    const tag = tagsMap.get(gt.tag_id);
+    if (tag) {
+      tagsByGym.get(gt.gym_id)!.push(tag);
+    }
+  });
+
+  const trainersByGym = new Map<string, Trainer[]>();
+  allTrainers.forEach(trainer => {
+    if (!trainersByGym.has(trainer.gym_id!)) {
+      trainersByGym.set(trainer.gym_id!, []);
+    }
+    trainersByGym.get(trainer.gym_id!)!.push(trainer);
+  });
+
+  // Map results using preloaded data
+  const gymsWithDetailsList: GymWithDetails[] = gymsResult.map(g => {
+    const images = imagesByGym.get(g.id) || [];
+    const tags = tagsByGym.get(g.id) || [];
+    const associatedTrainers = trainersByGym.get(g.id) || [];
+    
+    return mapRawGymToGymWithDetails(g, g.provinceData as Province | null, images, tags, associatedTrainers);
+  });
 
   return { gyms: gymsWithDetailsList, total };
 }
@@ -362,36 +401,23 @@ export async function updateGym(id: string, gymData: UpdateGymRequest): Promise<
       
       // Handle associatedTrainers update if provided
       if (associatedTrainers !== undefined) {
-        console.log("=== UPDATING GYM ASSOCIATED TRAINERS ===");
-        console.log("Gym ID:", id);
-        console.log("Received associatedTrainers array:", associatedTrainers);
-        console.log("Number of trainers to associate:", associatedTrainers.length);
-        
         // First, get current trainers associated with this gym
         const currentTrainers = await tx.select().from(schema.trainers).where(eq(schema.trainers.gym_id, id));
-        console.log("Current trainers before update:", currentTrainers.map(t => `${t.first_name_th} ${t.last_name_th} (${t.id})`));
         
         // First, remove gym association from trainers currently associated with this gym
-        console.log("Removing gym association from all current trainers...");
         await tx.update(schema.trainers)
           .set({ gym_id: null, updated_at: new Date() })
           .where(eq(schema.trainers.gym_id, id));
         
         // Then, associate new trainers with this gym
         if (associatedTrainers.length > 0) {
-          console.log("Associating new trainers with gym:", associatedTrainers);
           await tx.update(schema.trainers)
             .set({ gym_id: id, updated_at: new Date() })
             .where(inArray(schema.trainers.id, associatedTrainers));
           
           // Verify the update
           const updatedTrainers = await tx.select().from(schema.trainers).where(eq(schema.trainers.gym_id, id));
-          console.log("Trainers after update:", updatedTrainers.map(t => `${t.first_name_th} ${t.last_name_th} (${t.id})`));
-        } else {
-          console.log("No trainers to associate - all trainers removed from gym");
         }
-        
-        console.log("=== GYM TRAINER UPDATE COMPLETE ===");
       }
       
       // Fetch current tags
