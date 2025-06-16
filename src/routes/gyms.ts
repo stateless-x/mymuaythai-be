@@ -23,9 +23,22 @@ export async function gymRoutes(fastify: FastifyInstance) {
   fastify.get('/gyms', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       // Validate query parameters
-      const { page, pageSize, search, provinceId, includeInactive } = gymQuerySchema.parse(request.query);
+      const { page, pageSize, searchTerm, provinceId, includeInactive, sortField, sortBy, includeAssociatedTrainers } = gymQuerySchema.parse(request.query);
       
-      const result = await gymService.getAllGyms(page, pageSize, search, provinceId, includeInactive);
+      // Build service parameters, filtering out undefined values to satisfy exactOptionalPropertyTypes
+      const serviceParams: Parameters<typeof gymService.getAllGyms>[0] = {
+        page,
+        pageSize,
+        sortField,
+        sortBy,
+      };
+      
+      if (searchTerm) serviceParams.searchTerm = searchTerm;
+      if (provinceId) serviceParams.provinceId = provinceId;
+      if (includeInactive === false) serviceParams.is_active = true;
+      if (includeAssociatedTrainers !== undefined) serviceParams.includeAssociatedTrainers = includeAssociatedTrainers;
+      
+      const result = await gymService.getAllGyms(serviceParams);
       
       const response: ApiResponse<typeof result.gyms> = {
         success: true,
@@ -112,13 +125,27 @@ export async function gymRoutes(fastify: FastifyInstance) {
   // Search gyms
   fastify.get('/gyms/search', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const { page, pageSize, search } = gymQuerySchema.parse(request.query);
+      const { page, pageSize, searchTerm, includeInactive, sortField, sortBy } = gymQuerySchema.parse(request.query);
       
-      if (!search) {
+      if (!searchTerm) {
         throw new ValidationError('Search term is required');
       }
       
-      const result = await gymService.searchGyms(search, page, pageSize);
+      // Build service parameters, filtering out undefined values to satisfy exactOptionalPropertyTypes
+      const serviceParams: Parameters<typeof gymService.getAllGyms>[0] = {
+        page,
+        pageSize,
+        searchTerm,
+        sortField,
+        sortBy,
+      };
+      
+      // Fix includeInactive logic:
+      // - includeInactive=true: don't filter by is_active (show both active and inactive)
+      // - includeInactive=false: filter to show only active gyms (is_active=true)
+      if (includeInactive === false) serviceParams.is_active = true;
+      
+      const result = await gymService.getAllGyms(serviceParams);
       
       const response: ApiResponse<typeof result.gyms> = {
         success: true,

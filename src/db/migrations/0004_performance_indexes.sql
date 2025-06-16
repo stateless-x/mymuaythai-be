@@ -1,5 +1,5 @@
 -- Performance indexes for MyMuayThai database
--- Run this after initial migration
+-- Migration: Add performance indexes for optimal query performance
 
 -- Gyms table indexes
 CREATE INDEX IF NOT EXISTS idx_gyms_province_id ON gyms(province_id);

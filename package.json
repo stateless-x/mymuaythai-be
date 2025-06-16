@@ -17,11 +17,15 @@
     "db:seed": "bun run src/db/seed.ts",
     "db:seed:provinces": "bun run src/db/province-seed.ts",
     "db:seed:dev": "bun run src/db/dev-seed.ts",
+    "db:seed:massive": "bun run src/db/massive-seed.ts",
     "db:cleanup": "bun run src/db/cleanup.ts",
+    "db:cleanup:full": "bun run src/db/cleanup.ts full",
     "db:studio": "drizzle-kit studio",
     "db:reset": "bun run db:cleanup && bun run db:migrate",
-    "db:fresh": "bun run db:reset && bun run db:seed:provinces && bun run db:seed:dev",
+    "db:fresh": "bun run db:reset && bun run db:seed:provinces && bun run db:seed:massive",
+    "db:fresh:dev": "bun run db:reset && bun run db:seed:provinces && bun run db:seed:dev",
     "db:fresh:full": "bun run db:reset && bun run db:seed:provinces && bun run db:seed",
+    "db:setup:production": "bun run db:migrate && bun run db:seed:provinces",
     "setup:dev": "bun run db:migrate && bun run db:seed:provinces && bun run db:seed:dev"
   },
   "keywords": [

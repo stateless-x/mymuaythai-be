@@ -94,6 +94,44 @@ export async function getAllTrainers(
   
   if (searchTerm) {
     const searchPattern = `%${searchTerm.toLowerCase()}%`;
+    const exactPattern = searchTerm.toLowerCase();
+    
+    // Create relevance-based ordering using CASE WHEN for scoring
+    // Higher scores for exact matches, lower scores for partial matches
+    const relevanceScore = sql`
+      CASE 
+        -- Exact matches in names get highest priority (score 100)
+        WHEN LOWER(${schema.trainers.first_name_th}) = ${exactPattern} THEN 100
+        WHEN LOWER(${schema.trainers.last_name_th}) = ${exactPattern} THEN 100
+        WHEN LOWER(${schema.trainers.first_name_en}) = ${exactPattern} THEN 100
+        WHEN LOWER(${schema.trainers.last_name_en}) = ${exactPattern} THEN 100
+        
+        -- Names starting with search term get high priority (score 80)
+        WHEN LOWER(${schema.trainers.first_name_th}) LIKE ${exactPattern + '%'} THEN 80
+        WHEN LOWER(${schema.trainers.last_name_th}) LIKE ${exactPattern + '%'} THEN 80
+        WHEN LOWER(${schema.trainers.first_name_en}) LIKE ${exactPattern + '%'} THEN 80
+        WHEN LOWER(${schema.trainers.last_name_en}) LIKE ${exactPattern + '%'} THEN 80
+        
+        -- Names containing search term get medium priority (score 60)
+        WHEN LOWER(${schema.trainers.first_name_th}) LIKE ${searchPattern} THEN 60
+        WHEN LOWER(${schema.trainers.last_name_th}) LIKE ${searchPattern} THEN 60
+        WHEN LOWER(${schema.trainers.first_name_en}) LIKE ${searchPattern} THEN 60
+        WHEN LOWER(${schema.trainers.last_name_en}) LIKE ${searchPattern} THEN 60
+        
+        -- Bio matches get lower priority (score 40)
+        WHEN LOWER(${schema.trainers.bio_th}) LIKE ${searchPattern} THEN 40
+        WHEN LOWER(${schema.trainers.bio_en}) LIKE ${searchPattern} THEN 40
+        
+        -- Province/gym matches get lowest priority (score 20)
+        WHEN LOWER(${schema.provinces.name_th}) LIKE ${searchPattern} THEN 20
+        WHEN LOWER(${schema.provinces.name_en}) LIKE ${searchPattern} THEN 20
+        WHEN LOWER(${schema.gyms.name_th}) LIKE ${searchPattern} THEN 20
+        WHEN LOWER(${schema.gyms.name_en}) LIKE ${searchPattern} THEN 20
+        
+        ELSE 0
+      END
+    `;
+    
     whereConditions.push(
       or(
         ilike(schema.trainers.first_name_th, searchPattern),
@@ -108,6 +146,9 @@ export async function getAllTrainers(
         ilike(schema.gyms.name_en, searchPattern)
       )
     );
+    
+    // Store relevance score for ordering
+    whereConditions.push(sql`${relevanceScore} > 0`);
   }
 
   const validWhereConditions = whereConditions.filter(c => c !== undefined) as SQL<unknown>[];
@@ -134,13 +175,89 @@ export async function getAllTrainers(
     created_at: schema.trainers.created_at,
     updated_at: schema.trainers.updated_at,
     provinceData: schema.provinces,
-    gymData: schema.gyms
+    gymData: schema.gyms,
+    // Add relevance score to select when searching
+    ...(searchTerm ? {
+      relevance: sql`
+        CASE 
+          -- Exact matches in names get highest priority (score 100)
+          WHEN LOWER(${schema.trainers.first_name_th}) = ${searchTerm.toLowerCase()} THEN 100
+          WHEN LOWER(${schema.trainers.last_name_th}) = ${searchTerm.toLowerCase()} THEN 100
+          WHEN LOWER(${schema.trainers.first_name_en}) = ${searchTerm.toLowerCase()} THEN 100
+          WHEN LOWER(${schema.trainers.last_name_en}) = ${searchTerm.toLowerCase()} THEN 100
+          
+          -- Names starting with search term get high priority (score 80)
+          WHEN LOWER(${schema.trainers.first_name_th}) LIKE ${searchTerm.toLowerCase() + '%'} THEN 80
+          WHEN LOWER(${schema.trainers.last_name_th}) LIKE ${searchTerm.toLowerCase() + '%'} THEN 80
+          WHEN LOWER(${schema.trainers.first_name_en}) LIKE ${searchTerm.toLowerCase() + '%'} THEN 80
+          WHEN LOWER(${schema.trainers.last_name_en}) LIKE ${searchTerm.toLowerCase() + '%'} THEN 80
+          
+          -- Names containing search term get medium priority (score 60)
+          WHEN LOWER(${schema.trainers.first_name_th}) LIKE ${'%' + searchTerm.toLowerCase() + '%'} THEN 60
+          WHEN LOWER(${schema.trainers.last_name_th}) LIKE ${'%' + searchTerm.toLowerCase() + '%'} THEN 60
+          WHEN LOWER(${schema.trainers.first_name_en}) LIKE ${'%' + searchTerm.toLowerCase() + '%'} THEN 60
+          WHEN LOWER(${schema.trainers.last_name_en}) LIKE ${'%' + searchTerm.toLowerCase() + '%'} THEN 60
+          
+          -- Bio matches get lower priority (score 40)
+          WHEN LOWER(${schema.trainers.bio_th}) LIKE ${'%' + searchTerm.toLowerCase() + '%'} THEN 40
+          WHEN LOWER(${schema.trainers.bio_en}) LIKE ${'%' + searchTerm.toLowerCase() + '%'} THEN 40
+          
+          -- Province/gym matches get lowest priority (score 20)
+          WHEN LOWER(${schema.provinces.name_th}) LIKE ${'%' + searchTerm.toLowerCase() + '%'} THEN 20
+          WHEN LOWER(${schema.provinces.name_en}) LIKE ${'%' + searchTerm.toLowerCase() + '%'} THEN 20
+          WHEN LOWER(${schema.gyms.name_th}) LIKE ${'%' + searchTerm.toLowerCase() + '%'} THEN 20
+          WHEN LOWER(${schema.gyms.name_en}) LIKE ${'%' + searchTerm.toLowerCase() + '%'} THEN 20
+          
+          ELSE 0
+        END
+      `
+    } : {})
   })
   .from(schema.trainers)
   .leftJoin(schema.provinces, eq(schema.trainers.province_id, schema.provinces.id))
   .leftJoin(schema.gyms, eq(schema.trainers.gym_id, schema.gyms.id))
   .where(validWhereConditions.length > 0 ? and(...validWhereConditions) : undefined)
-  .orderBy(sortBy === 'asc' ? asc(sortColumn) : desc(sortColumn))
+  .orderBy(
+    // If searching, order by relevance first, then by sort field
+    ...(searchTerm ? [
+      desc(sql`
+        CASE 
+          -- Exact matches in names get highest priority (score 100)
+          WHEN LOWER(${schema.trainers.first_name_th}) = ${searchTerm.toLowerCase()} THEN 100
+          WHEN LOWER(${schema.trainers.last_name_th}) = ${searchTerm.toLowerCase()} THEN 100
+          WHEN LOWER(${schema.trainers.first_name_en}) = ${searchTerm.toLowerCase()} THEN 100
+          WHEN LOWER(${schema.trainers.last_name_en}) = ${searchTerm.toLowerCase()} THEN 100
+          
+          -- Names starting with search term get high priority (score 80)
+          WHEN LOWER(${schema.trainers.first_name_th}) LIKE ${searchTerm.toLowerCase() + '%'} THEN 80
+          WHEN LOWER(${schema.trainers.last_name_th}) LIKE ${searchTerm.toLowerCase() + '%'} THEN 80
+          WHEN LOWER(${schema.trainers.first_name_en}) LIKE ${searchTerm.toLowerCase() + '%'} THEN 80
+          WHEN LOWER(${schema.trainers.last_name_en}) LIKE ${searchTerm.toLowerCase() + '%'} THEN 80
+          
+          -- Names containing search term get medium priority (score 60)
+          WHEN LOWER(${schema.trainers.first_name_th}) LIKE ${'%' + searchTerm.toLowerCase() + '%'} THEN 60
+          WHEN LOWER(${schema.trainers.last_name_th}) LIKE ${'%' + searchTerm.toLowerCase() + '%'} THEN 60
+          WHEN LOWER(${schema.trainers.first_name_en}) LIKE ${'%' + searchTerm.toLowerCase() + '%'} THEN 60
+          WHEN LOWER(${schema.trainers.last_name_en}) LIKE ${'%' + searchTerm.toLowerCase() + '%'} THEN 60
+          
+          -- Bio matches get lower priority (score 40)
+          WHEN LOWER(${schema.trainers.bio_th}) LIKE ${'%' + searchTerm.toLowerCase() + '%'} THEN 40
+          WHEN LOWER(${schema.trainers.bio_en}) LIKE ${'%' + searchTerm.toLowerCase() + '%'} THEN 40
+          
+          -- Province/gym matches get lowest priority (score 20)
+          WHEN LOWER(${schema.provinces.name_th}) LIKE ${'%' + searchTerm.toLowerCase() + '%'} THEN 20
+          WHEN LOWER(${schema.provinces.name_en}) LIKE ${'%' + searchTerm.toLowerCase() + '%'} THEN 20
+          WHEN LOWER(${schema.gyms.name_th}) LIKE ${'%' + searchTerm.toLowerCase() + '%'} THEN 20
+          WHEN LOWER(${schema.gyms.name_en}) LIKE ${'%' + searchTerm.toLowerCase() + '%'} THEN 20
+          
+          ELSE 0
+        END
+      `),
+      sortBy === 'asc' ? asc(sortColumn) : desc(sortColumn)
+    ] : [
+      sortBy === 'asc' ? asc(sortColumn) : desc(sortColumn)
+    ])
+  )
   .limit(pageSize)
   .offset(offset);
 
@@ -612,12 +729,12 @@ export async function removeTrainerClass(trainerId: string, classId: string): Pr
   return result.length > 0;
 }
 
-export async function searchTrainers(query: string, page: number = 1, pageSize: number = 20, includeClasses: boolean = false): Promise<{ trainers: TrainerWithDetails[], total: number }> {
+export async function searchTrainers(query: string, page: number = 1, pageSize: number = 20, includeClasses: boolean = false, includeInactive: boolean = false, isFreelance?: boolean): Promise<{ trainers: TrainerWithDetails[], total: number }> {
   if (!query?.trim()) {
     return { trainers: [], total: 0 };
   }
   
-  return getAllTrainers(page, pageSize, query.trim(), undefined, undefined, undefined, true, 'created_at', 'desc', includeClasses, false);
+  return getAllTrainers(page, pageSize, query.trim(), undefined, undefined, isFreelance, !includeInactive ? true : undefined, 'created_at', 'desc', includeClasses, false);
 }
 
 // Add a new function specifically for getting unassigned trainers

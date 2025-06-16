@@ -125,9 +125,12 @@ export const paginationSchema = z.object({
 });
 
 export const gymQuerySchema = paginationSchema.extend({
-  search: z.string().max(255).optional(),
+  searchTerm: z.string().max(255).optional(),
   provinceId: z.string().regex(/^\d+$/).transform(Number).pipe(z.number().int().positive()).optional(),
   includeInactive: z.string().transform((val) => val === 'true').pipe(z.boolean()).optional(),
+  sortField: z.enum(['created_at', 'updated_at']).default('created_at'),
+  sortBy: z.enum(['asc', 'desc']).default('desc'),
+  includeAssociatedTrainers: z.string().transform((val) => val === 'true').pipe(z.boolean()).optional(),
 });
 
 export const trainerQuerySchema = paginationSchema.extend({

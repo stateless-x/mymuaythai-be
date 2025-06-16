@@ -208,9 +208,9 @@ export async function trainerRoutes(fastify: FastifyInstance) {
     try {
       const { query } = request.params;
       // Validate query parameters
-      const { page, pageSize, includeClasses } = trainerQuerySchema.parse(request.query);
+      const { page, pageSize, includeInactive, includeClasses, isFreelance } = trainerQuerySchema.parse(request.query);
       
-      const { trainers, total } = await trainerService.searchTrainers(query, page, pageSize, includeClasses);
+      const { trainers, total } = await trainerService.searchTrainers(query, page, pageSize, includeClasses, includeInactive, isFreelance);
       const totalPages = Math.ceil(total / pageSize);
       
       const response: ApiResponse<PaginatedResponse<TrainerWithDetails>> = {
