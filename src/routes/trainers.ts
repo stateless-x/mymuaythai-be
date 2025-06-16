@@ -12,7 +12,19 @@ export async function trainerRoutes(fastify: FastifyInstance) {
       // Validate query parameters
       const { page, pageSize, search, provinceId, gymId, isFreelance, includeInactive, includeClasses, unassignedOnly } = trainerQuerySchema.parse(request.query);
 
-      const { trainers, total } = await trainerService.getAllTrainers(page, pageSize, search, provinceId, gymId, isFreelance, includeInactive, includeClasses, unassignedOnly);
+      const { trainers, total } = await trainerService.getAllTrainers(
+        page, 
+        pageSize, 
+        search, 
+        provinceId, 
+        gymId, 
+        isFreelance, 
+        includeInactive ? undefined : true, // includeInactive=false means only active (isActive=true), includeInactive=true means all (isActive=undefined)
+        'created_at', // sortField
+        'desc', // sortBy  
+        includeClasses, 
+        unassignedOnly
+      );
       const totalPages = Math.ceil(total / pageSize);
       
       const response: ApiResponse<PaginatedResponse<TrainerWithDetails>> = {

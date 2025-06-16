@@ -7,6 +7,7 @@ import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import { gymRoutes } from './routes/gyms';
 import { trainerRoutes } from './routes/trainers';
+import { trainerSelectionRoutes } from './routes/trainerSelection';
 import { provinceRoutes } from './routes/provinces';
 import { tagRoutes } from './routes/tags';
 import { healthRoutes } from './routes/health';
@@ -123,6 +124,7 @@ fastify.get('/health', async (request, reply) => {
 fastify.register(async (fastify) => {
   await fastify.register(gymRoutes, { prefix: '/api' });
   await fastify.register(trainerRoutes, { prefix: '/api' });
+  await fastify.register(trainerSelectionRoutes, { prefix: '/api' });
   await fastify.register(provinceRoutes, { prefix: '/api' });
   await fastify.register(tagRoutes, { prefix: '/api' });
 });
