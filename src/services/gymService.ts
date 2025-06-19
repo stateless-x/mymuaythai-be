@@ -417,9 +417,24 @@ export async function updateGym(id: string, gymData: UpdateGymRequest): Promise<
     const imageUrls = (gymData as any).images || undefined;
   
     return await db.transaction(async (tx) => {
-      const updatedGyms = Object.keys(gymDetails).length > 0
-        ? await tx.update(schema.gyms).set({ ...gymDetails, updated_at: new Date() }).where(eq(schema.gyms.id, id)).returning()
-        : await tx.select().from(schema.gyms).where(eq(schema.gyms.id, id));
+      // Check if any update is happening (main gym fields, tags, images, or trainers)
+      const hasMainFieldsUpdate = Object.keys(gymDetails).length > 0;
+      const hasTagsUpdate = tagObjects !== undefined;
+      const hasImagesUpdate = imageUrls !== undefined;
+      const hasTrainersUpdate = trainerIds !== undefined;
+      const hasAnyUpdate = hasMainFieldsUpdate || hasTagsUpdate || hasImagesUpdate || hasTrainersUpdate;
+
+      let updatedGyms;
+      if (hasMainFieldsUpdate) {
+        // Update main gym fields along with updated_at
+        updatedGyms = await tx.update(schema.gyms).set({ ...gymDetails, updated_at: new Date() }).where(eq(schema.gyms.id, id)).returning();
+      } else if (hasAnyUpdate) {
+        // Even if no main gym fields to update, still update updated_at if other data is being updated
+        updatedGyms = await tx.update(schema.gyms).set({ updated_at: new Date() }).where(eq(schema.gyms.id, id)).returning();
+      } else {
+        // If truly nothing to update, just fetch the current gym
+        updatedGyms = await tx.select().from(schema.gyms).where(eq(schema.gyms.id, id));
+      }
   
       const updatedGym = updatedGyms[0];
       if (!updatedGym) {

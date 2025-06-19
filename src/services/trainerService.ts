@@ -96,41 +96,7 @@ export async function getAllTrainers(
     const searchPattern = `%${searchTerm.toLowerCase()}%`;
     const exactPattern = searchTerm.toLowerCase();
     
-    // Create relevance-based ordering using CASE WHEN for scoring
-    // Higher scores for exact matches, lower scores for partial matches
-    const relevanceScore = sql`
-      CASE 
-        -- Exact matches in names get highest priority (score 100)
-        WHEN LOWER(${schema.trainers.first_name_th}) = ${exactPattern} THEN 100
-        WHEN LOWER(${schema.trainers.last_name_th}) = ${exactPattern} THEN 100
-        WHEN LOWER(${schema.trainers.first_name_en}) = ${exactPattern} THEN 100
-        WHEN LOWER(${schema.trainers.last_name_en}) = ${exactPattern} THEN 100
-        
-        -- Names starting with search term get high priority (score 80)
-        WHEN LOWER(${schema.trainers.first_name_th}) LIKE ${exactPattern + '%'} THEN 80
-        WHEN LOWER(${schema.trainers.last_name_th}) LIKE ${exactPattern + '%'} THEN 80
-        WHEN LOWER(${schema.trainers.first_name_en}) LIKE ${exactPattern + '%'} THEN 80
-        WHEN LOWER(${schema.trainers.last_name_en}) LIKE ${exactPattern + '%'} THEN 80
-        
-        -- Names containing search term get medium priority (score 60)
-        WHEN LOWER(${schema.trainers.first_name_th}) LIKE ${searchPattern} THEN 60
-        WHEN LOWER(${schema.trainers.last_name_th}) LIKE ${searchPattern} THEN 60
-        WHEN LOWER(${schema.trainers.first_name_en}) LIKE ${searchPattern} THEN 60
-        WHEN LOWER(${schema.trainers.last_name_en}) LIKE ${searchPattern} THEN 60
-        
-        -- Bio matches get lower priority (score 40)
-        WHEN LOWER(${schema.trainers.bio_th}) LIKE ${searchPattern} THEN 40
-        WHEN LOWER(${schema.trainers.bio_en}) LIKE ${searchPattern} THEN 40
-        
-        -- Province/gym matches get lowest priority (score 20)
-        WHEN LOWER(${schema.provinces.name_th}) LIKE ${searchPattern} THEN 20
-        WHEN LOWER(${schema.provinces.name_en}) LIKE ${searchPattern} THEN 20
-        WHEN LOWER(${schema.gyms.name_th}) LIKE ${searchPattern} THEN 20
-        WHEN LOWER(${schema.gyms.name_en}) LIKE ${searchPattern} THEN 20
-        
-        ELSE 0
-      END
-    `;
+    // Simplified search implementation without complex relevance scoring to avoid SQL errors with special characters
     
     whereConditions.push(
       or(
@@ -147,8 +113,7 @@ export async function getAllTrainers(
       )
     );
     
-    // Store relevance score for ordering
-    whereConditions.push(sql`${relevanceScore} > 0`);
+    // Removed problematic relevance scoring from where conditions to fix search errors
   }
 
   const validWhereConditions = whereConditions.filter(c => c !== undefined) as SQL<unknown>[];
@@ -178,49 +143,29 @@ export async function getAllTrainers(
     updated_at: schema.trainers.updated_at,
     provinceData: schema.provinces,
     gymData: schema.gyms,
-    // Add relevance score to select when searching
-    ...(searchTerm ? {
-      relevance: sql`
-        CASE 
-          -- Exact matches in names get highest priority (score 100)
-          WHEN LOWER(${schema.trainers.first_name_th}) = ${searchTerm.toLowerCase()} THEN 100
-          WHEN LOWER(${schema.trainers.last_name_th}) = ${searchTerm.toLowerCase()} THEN 100
-          WHEN LOWER(${schema.trainers.first_name_en}) = ${searchTerm.toLowerCase()} THEN 100
-          WHEN LOWER(${schema.trainers.last_name_en}) = ${searchTerm.toLowerCase()} THEN 100
-          
-          -- Names starting with search term get high priority (score 80)
-          WHEN LOWER(${schema.trainers.first_name_th}) LIKE ${searchTerm.toLowerCase() + '%'} THEN 80
-          WHEN LOWER(${schema.trainers.last_name_th}) LIKE ${searchTerm.toLowerCase() + '%'} THEN 80
-          WHEN LOWER(${schema.trainers.first_name_en}) LIKE ${searchTerm.toLowerCase() + '%'} THEN 80
-          WHEN LOWER(${schema.trainers.last_name_en}) LIKE ${searchTerm.toLowerCase() + '%'} THEN 80
-          
-          -- Names containing search term get medium priority (score 60)
-          WHEN LOWER(${schema.trainers.first_name_th}) LIKE ${'%' + searchTerm.toLowerCase() + '%'} THEN 60
-          WHEN LOWER(${schema.trainers.last_name_th}) LIKE ${'%' + searchTerm.toLowerCase() + '%'} THEN 60
-          WHEN LOWER(${schema.trainers.first_name_en}) LIKE ${'%' + searchTerm.toLowerCase() + '%'} THEN 60
-          WHEN LOWER(${schema.trainers.last_name_en}) LIKE ${'%' + searchTerm.toLowerCase() + '%'} THEN 60
-          
-          -- Bio matches get lower priority (score 40)
-          WHEN LOWER(${schema.trainers.bio_th}) LIKE ${'%' + searchTerm.toLowerCase() + '%'} THEN 40
-          WHEN LOWER(${schema.trainers.bio_en}) LIKE ${'%' + searchTerm.toLowerCase() + '%'} THEN 40
-          
-          -- Province/gym matches get lowest priority (score 20)
-          WHEN LOWER(${schema.provinces.name_th}) LIKE ${'%' + searchTerm.toLowerCase() + '%'} THEN 20
-          WHEN LOWER(${schema.provinces.name_en}) LIKE ${'%' + searchTerm.toLowerCase() + '%'} THEN 20
-          WHEN LOWER(${schema.gyms.name_th}) LIKE ${'%' + searchTerm.toLowerCase() + '%'} THEN 20
-          WHEN LOWER(${schema.gyms.name_en}) LIKE ${'%' + searchTerm.toLowerCase() + '%'} THEN 20
-          
-          ELSE 0
-        END
-      `
-    } : {})
+    // Skip relevance score in select for now to avoid SQL template issues with special characters
+    // The ordering is handled in the orderBy clause below
+    
   })
   .from(schema.trainers)
   .leftJoin(schema.provinces, eq(schema.trainers.province_id, schema.provinces.id))
   .leftJoin(schema.gyms, eq(schema.trainers.gym_id, schema.gyms.id))
   .where(validWhereConditions.length > 0 ? and(...validWhereConditions) : undefined)
   .orderBy(
-    ...(searchTerm ? [desc(sql`relevance`)] : []),
+    // When searching, use a simple relevance scoring based on name matches
+    ...(searchTerm ? [
+      desc(sql`
+        CASE 
+          WHEN LOWER(${schema.trainers.first_name_th}) LIKE ${`%${searchTerm.toLowerCase()}%`} OR
+               LOWER(${schema.trainers.last_name_th}) LIKE ${`%${searchTerm.toLowerCase()}%`} THEN 3
+          WHEN LOWER(${schema.trainers.first_name_en}) LIKE ${`%${searchTerm.toLowerCase()}%`} OR
+               LOWER(${schema.trainers.last_name_en}) LIKE ${`%${searchTerm.toLowerCase()}%`} THEN 2
+          WHEN LOWER(${schema.trainers.bio_th}) LIKE ${`%${searchTerm.toLowerCase()}%`} OR
+               LOWER(${schema.trainers.bio_en}) LIKE ${`%${searchTerm.toLowerCase()}%`} THEN 1
+          ELSE 0
+        END
+      `)
+    ] : []),
     sortDirection(sortColumn)
   )
   .limit(pageSize)
@@ -503,8 +448,9 @@ export async function updateTrainer(id: string, trainerData: UpdateTrainerReques
     const result = await db.transaction(async (tx) => {
       let updatedTrainer: Trainer[] = [];
       
-      // Update the main trainer fields only if there are fields to update
+      // Always update the updated_at timestamp when any trainer data is modified
       if (Object.keys(trainerFields).length > 0) {
+        // Update main trainer fields along with updated_at
         updatedTrainer = await tx.update(schema.trainers)
           .set({
             ...trainerFields as Partial<NewTrainer>,
@@ -517,15 +463,30 @@ export async function updateTrainer(id: string, trainerData: UpdateTrainerReques
           return null;
         }
       } else {
-        // If no trainer fields to update, just fetch the current trainer
-        const currentTrainer = await tx.select()
-          .from(schema.trainers)
-          .where(eq(schema.trainers.id, id));
+        // Even if no main trainer fields to update, still update updated_at if tags or classes are being updated
+        const hasTagsOrClassesUpdate = tags !== undefined || classes !== undefined;
         
-        if (!currentTrainer || currentTrainer.length === 0) {
-          return null;
+        if (hasTagsOrClassesUpdate) {
+          // Update only the updated_at timestamp
+          updatedTrainer = await tx.update(schema.trainers)
+            .set({ updated_at: new Date() })
+            .where(eq(schema.trainers.id, id))
+            .returning();
+          
+          if (!updatedTrainer || updatedTrainer.length === 0) {
+            return null;
+          }
+        } else {
+          // If truly nothing to update, just fetch the current trainer
+          const currentTrainer = await tx.select()
+            .from(schema.trainers)
+            .where(eq(schema.trainers.id, id));
+          
+          if (!currentTrainer || currentTrainer.length === 0) {
+            return null;
+          }
+          updatedTrainer = currentTrainer;
         }
-        updatedTrainer = currentTrainer;
       }
       
       const trainer = updatedTrainer[0]!;

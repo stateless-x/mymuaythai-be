@@ -11,6 +11,7 @@ import { trainerSelectionRoutes } from './routes/trainerSelection';
 import { provinceRoutes } from './routes/provinces';
 import { tagRoutes } from './routes/tags';
 import { healthRoutes } from './routes/health';
+import { dashboardRoutes } from './routes/dashboard';
 import { checkDatabaseConnection } from './db/config';
 import { 
   env, 
@@ -127,6 +128,7 @@ fastify.register(async (fastify) => {
   await fastify.register(trainerSelectionRoutes, { prefix: '/api' });
   await fastify.register(provinceRoutes, { prefix: '/api' });
   await fastify.register(tagRoutes, { prefix: '/api' });
+  await fastify.register(dashboardRoutes, { prefix: '/api' });
 });
 
 // Register error handler

@@ -219,10 +219,32 @@ export async function trainerRoutes(fastify: FastifyInstance) {
   }>, reply: FastifyReply) => {
     try {
       const { query } = request.params;
-      // Validate query parameters
-      const { page, pageSize, includeInactive, includeClasses, isFreelance } = trainerQuerySchema.parse(request.query);
       
-      const { trainers, total } = await trainerService.searchTrainers(query, page, pageSize, includeClasses, includeInactive, isFreelance);
+      if (!query || query.trim().length === 0) {
+        const response: ApiResponse<null> = {
+          success: false,
+          error: 'Search query cannot be empty'
+        };
+        return reply.code(400).send(response);
+      }
+      
+      // Validate query parameters using a more flexible schema
+      const querySchema = z.object({
+        page: z.string().regex(/^\d+$/).transform(Number).pipe(z.number().int().positive()).default('1'),
+        pageSize: z.string().regex(/^\d+$/).transform(Number).pipe(z.number().int().positive().max(100)).default('10'),
+        includeInactive: z.string().transform((val) => val === 'true').pipe(z.boolean()).optional(),
+        includeClasses: z.string().transform((val) => val === 'true').pipe(z.boolean()).optional(),
+        isFreelance: z.string().transform((val) => val === 'true').pipe(z.boolean()).optional(),
+        sortField: z.enum(['created_at', 'updated_at']).default('updated_at'),
+        sortBy: z.enum(['asc', 'desc']).default('desc'),
+      });
+      
+      const { page, pageSize, includeInactive, includeClasses, isFreelance, sortField, sortBy } = querySchema.parse(request.query);
+      
+      // Decode the search query to handle URL-encoded characters like Thai text
+      const decodedQuery = decodeURIComponent(query);
+      
+      const { trainers, total } = await trainerService.searchTrainers(decodedQuery, page, pageSize, includeClasses, includeInactive, isFreelance);
       const totalPages = Math.ceil(total / pageSize);
       
       const response: ApiResponse<PaginatedResponse<TrainerWithDetails>> = {
@@ -238,12 +260,19 @@ export async function trainerRoutes(fastify: FastifyInstance) {
       };
       return reply.code(200).send(response);
     } catch (error) {
+      console.error('Error in trainers search endpoint:', error);
+      
       if (error instanceof z.ZodError) {
-        throw new ValidationError(`Query validation failed: ${formatZodError(error)}`);
+        const response: ApiResponse<null> = {
+          success: false,
+          error: `Query validation failed: ${formatZodError(error)}`
+        };
+        return reply.code(400).send(response);
       }
+      
       const response: ApiResponse<null> = {
         success: false,
-        error: 'Failed to search trainers'
+        error: error instanceof Error ? error.message : 'Failed to search trainers'
       };
       return reply.code(500).send(response);
     }
