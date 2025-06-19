@@ -55,7 +55,17 @@ export async function tagRoutes(fastify: FastifyInstance) {
   fastify.get('/tags/:id', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     try {
       const { id } = request.params;
-      const tag = await tagService.getTagById(id);
+      const tagId = parseInt(id);
+      
+      if (isNaN(tagId)) {
+        const response: ApiResponse<null> = {
+          success: false,
+          error: 'Invalid tag ID'
+        };
+        return reply.code(400).send(response);
+      }
+      
+      const tag = await tagService.getTagById(tagId);
       
       if (!tag) {
         const response: ApiResponse<null> = {
@@ -76,6 +86,37 @@ export async function tagRoutes(fastify: FastifyInstance) {
       const response: ApiResponse<null> = {
         success: false,
         error: 'Failed to retrieve tag'
+      };
+      return reply.code(500).send(response);
+    }
+  });
+
+  // Get tag by slug
+  fastify.get('/tags/slug/:slug', async (request: FastifyRequest<{ Params: { slug: string } }>, reply: FastifyReply) => {
+    try {
+      const { slug } = request.params;
+      
+      const tag = await tagService.getTagBySlug(slug);
+      
+      if (!tag) {
+        const response: ApiResponse<null> = {
+          success: false,
+          error: 'Tag not found'
+        };
+        return reply.code(404).send(response);
+      }
+
+      const response: ApiResponse<typeof tag> = {
+        success: true,
+        data: tag,
+        message: 'Tag retrieved successfully'
+      };
+      return reply.code(200).send(response);
+    } catch (error) {
+      console.error('Error retrieving tag by slug:', error);
+      const response: ApiResponse<null> = {
+        success: false,
+        error: 'Failed to retrieve tag by slug'
       };
       return reply.code(500).send(response);
     }
@@ -119,11 +160,42 @@ export async function tagRoutes(fastify: FastifyInstance) {
     }
   });
 
+  // Get all tags with usage statistics
+  fastify.get('/tags/stats', async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const tagsWithStats = await tagService.getAllTagsWithStats();
+      
+      const response: ApiResponse<typeof tagsWithStats> = {
+        success: true,
+        data: tagsWithStats,
+        message: 'Tags with statistics retrieved successfully'
+      };
+      return reply.code(200).send(response);
+    } catch (error) {
+      console.error('Error retrieving tags with stats:', error);
+      const response: ApiResponse<null> = {
+        success: false,
+        error: 'Failed to retrieve tags with statistics'
+      };
+      return reply.code(500).send(response);
+    }
+  });
+
   // Get tag usage statistics
   fastify.get('/tags/:id/stats', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     try {
       const { id } = request.params;
-      const stats = await tagService.getTagUsageStats(id);
+      const tagId = parseInt(id);
+      
+      if (isNaN(tagId)) {
+        const response: ApiResponse<null> = {
+          success: false,
+          error: 'Invalid tag ID'
+        };
+        return reply.code(400).send(response);
+      }
+      
+      const stats = await tagService.getTagUsageStats(tagId);
       
       if (!stats) {
         const response: ApiResponse<null> = {
@@ -178,8 +250,18 @@ export async function tagRoutes(fastify: FastifyInstance) {
   }>, reply: FastifyReply) => {
     try {
       const { id } = request.params;
+      const tagId = parseInt(id);
+      
+      if (isNaN(tagId)) {
+        const response: ApiResponse<null> = {
+          success: false,
+          error: 'Invalid tag ID'
+        };
+        return reply.code(400).send(response);
+      }
+      
       const updateData = request.body;
-      const tag = await tagService.updateTag(id, updateData);
+      const tag = await tagService.updateTag(tagId, updateData);
       
       if (!tag) {
         const response: ApiResponse<null> = {
@@ -209,7 +291,17 @@ export async function tagRoutes(fastify: FastifyInstance) {
   fastify.delete('/tags/:id', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     try {
       const { id } = request.params;
-      await tagService.deleteTag(id);
+      const tagId = parseInt(id);
+      
+      if (isNaN(tagId)) {
+        const response: ApiResponse<null> = {
+          success: false,
+          error: 'Invalid tag ID'
+        };
+        return reply.code(400).send(response);
+      }
+      
+      await tagService.deleteTag(tagId);
       
       const response: ApiResponse<null> = {
         success: true,

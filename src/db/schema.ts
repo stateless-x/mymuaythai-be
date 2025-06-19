@@ -85,7 +85,8 @@ export const trainerClasses = pgTable('trainer_classes', {
 });
 
 export const tags = pgTable('tags', {
-  id: uuid('id').primaryKey().defaultRandom(),
+  id: serial('id').primaryKey(),
+  slug: text('slug').notNull().unique(),
   name_th: text('name_th').notNull(),
   name_en: text('name_en').notNull(),
 });
@@ -93,13 +94,13 @@ export const tags = pgTable('tags', {
 export const gymTags = pgTable('gym_tags', {
   id: uuid('id').primaryKey().defaultRandom(),
   gym_id: uuid('gym_id').references(() => gyms.id).notNull(),
-  tag_id: uuid('tag_id').references(() => tags.id).notNull(),
+  tag_id: integer('tag_id').references(() => tags.id).notNull(),
 });
 
 export const trainerTags = pgTable('trainer_tags', {
   id: uuid('id').primaryKey().defaultRandom(),
   trainer_id: uuid('trainer_id').references(() => trainers.id).notNull(),
-  tag_id: uuid('tag_id').references(() => tags.id).notNull(),
+  tag_id: integer('tag_id').references(() => tags.id).notNull(),
 });
 
 // --- RELATIONS ---

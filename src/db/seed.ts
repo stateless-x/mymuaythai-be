@@ -649,39 +649,44 @@ const mockClasses = [
 
 const mockTags = [
   {
-    id: '750e8400-e29b-41d4-a716-446655440001',
+    slug: 'beginner',
     name_th: 'ผู้เริ่มต้น',
     name_en: 'Beginner',
-    description_th: 'เหมาะสำหรับผู้เริ่มต้นเรียนมวยไทย',
-    description_en: 'Suitable for Muay Thai beginners',
   },
   {
-    id: '750e8400-e29b-41d4-a716-446655440002',
+    slug: 'professional',
     name_th: 'มืออาชีพ',
     name_en: 'Professional',
-    description_th: 'สำหรับนักสู้มืออาชีพ',
-    description_en: 'For professional fighters',
   },
   {
-    id: '750e8400-e29b-41d4-a716-446655440003',
+    slug: 'fitness',
     name_th: 'ฟิตเนส',
     name_en: 'Fitness',
-    description_th: 'เน้นการออกกำลังกายและสุขภาพ',
-    description_en: 'Focus on exercise and health',
   },
   {
-    id: '750e8400-e29b-41d4-a716-446655440004',
+    slug: 'self-defense',
     name_th: 'การป้องกันตัว',
     name_en: 'Self Defense',
-    description_th: 'เน้นทักษะการป้องกันตัว',
-    description_en: 'Focus on self-defense skills',
   },
   {
-    id: '750e8400-e29b-41d4-a716-446655440005',
+    slug: 'kids',
     name_th: 'เด็ก',
     name_en: 'Kids',
-    description_th: 'เหมาะสำหรับเด็กและเยาวชน',
-    description_en: 'Suitable for children and youth',
+  },
+  {
+    slug: 'muay-khao',
+    name_th: 'มวยเข่า',
+    name_en: 'Muay Khao',
+  },
+  {
+    slug: 'muay-tae',
+    name_th: 'มวยเตะ',
+    name_en: 'Muay Tae',
+  },
+  {
+    slug: 'muay-mat',
+    name_th: 'มวยหมัด',
+    name_en: 'Muay Mat',
   },
 ];
 
@@ -703,23 +708,37 @@ async function seedDatabase() {
 
     // Insert tags (skip if already exists)
     console.log('🏷️ Seeding tags...');
-    await db.insert(schema.tags).values(mockTags).onConflictDoNothing();
+    const insertedTags = await db.insert(schema.tags).values(mockTags).onConflictDoNothing().returning();
 
     // Insert gym-tag relationships (skip if already exists)
     console.log('🔗 Seeding gym-tag relationships...');
-    await db.insert(schema.gymTags).values([
-      { gym_id: '550e8400-e29b-41d4-a716-446655440001', tag_id: '750e8400-e29b-41d4-a716-446655440001' },
-      { gym_id: '550e8400-e29b-41d4-a716-446655440001', tag_id: '750e8400-e29b-41d4-a716-446655440003' },
-      { gym_id: '550e8400-e29b-41d4-a716-446655440002', tag_id: '750e8400-e29b-41d4-a716-446655440002' },
-      { gym_id: '550e8400-e29b-41d4-a716-446655440003', tag_id: '750e8400-e29b-41d4-a716-446655440002' },
-      { gym_id: '550e8400-e29b-41d4-a716-446655440004', tag_id: '750e8400-e29b-41d4-a716-446655440001' },
-      { gym_id: '550e8400-e29b-41d4-a716-446655440004', tag_id: '750e8400-e29b-41d4-a716-446655440005' },
-      { gym_id: '550e8400-e29b-41d4-a716-446655440005', tag_id: '750e8400-e29b-41d4-a716-446655440004' },
-      { gym_id: '550e8400-e29b-41d4-a716-446655440009', tag_id: '750e8400-e29b-41d4-a716-446655440002' }, // Tiger
-      { gym_id: '550e8400-e29b-41d4-a716-446655440013', tag_id: '750e8400-e29b-41d4-a716-446655440002' }, // Fairtex
-      { gym_id: '550e8400-e29b-41d4-a716-446655440007', tag_id: '750e8400-e29b-41d4-a716-446655440001' }, // Samui
-      { gym_id: '550e8400-e29b-41d4-a716-446655440011', tag_id: '750e8400-e29b-41d4-a716-446655440001' }, // Eagle
-    ]).onConflictDoNothing();
+    // Get all tags to map slugs to IDs
+    const allTags = await db.select().from(schema.tags);
+    const tagsBySlug = Object.fromEntries(allTags.map(tag => [tag.slug, tag.id]));
+    
+    if (Object.keys(tagsBySlug).length > 0) {
+             const gymTagRelations = [
+         { gym_id: '550e8400-e29b-41d4-a716-446655440001', tag_slug: 'beginner' },
+         { gym_id: '550e8400-e29b-41d4-a716-446655440001', tag_slug: 'fitness' },
+         { gym_id: '550e8400-e29b-41d4-a716-446655440002', tag_slug: 'professional' },
+         { gym_id: '550e8400-e29b-41d4-a716-446655440003', tag_slug: 'professional' },
+         { gym_id: '550e8400-e29b-41d4-a716-446655440004', tag_slug: 'beginner' },
+         { gym_id: '550e8400-e29b-41d4-a716-446655440004', tag_slug: 'kids' },
+         { gym_id: '550e8400-e29b-41d4-a716-446655440005', tag_slug: 'self-defense' },
+         { gym_id: '550e8400-e29b-41d4-a716-446655440009', tag_slug: 'professional' }, // Tiger
+         { gym_id: '550e8400-e29b-41d4-a716-446655440013', tag_slug: 'professional' }, // Fairtex
+         { gym_id: '550e8400-e29b-41d4-a716-446655440007', tag_slug: 'beginner' }, // Samui
+         { gym_id: '550e8400-e29b-41d4-a716-446655440011', tag_slug: 'beginner' }, // Eagle
+       ];
+       
+       const validGymTagRelations = gymTagRelations
+         .map(rel => ({ gym_id: rel.gym_id, tag_id: tagsBySlug[rel.tag_slug] }))
+         .filter(rel => rel.tag_id !== undefined) as { gym_id: string; tag_id: number }[];
+       
+       if (validGymTagRelations.length > 0) {
+         await db.insert(schema.gymTags).values(validGymTagRelations).onConflictDoNothing();
+       }
+    }
 
     // Insert trainer-class relationships (skip if already exists)
     console.log('👨‍🏫 Seeding trainer-class relationships...');
@@ -739,6 +758,60 @@ async function seedDatabase() {
       { trainer_id: '550e8400-e29b-41d4-a716-446655440112', class_id: '650e8400-e29b-41d4-a716-446655440001' }, // Sai
       { trainer_id: '550e8400-e29b-41d4-a716-446655440118', class_id: '650e8400-e29b-41d4-a716-446655440003' }, // Khun
     ]).onConflictDoNothing();
+
+    // Insert trainer-tag relationships (skip if already exists)
+    console.log('🏷️ Seeding trainer-tag relationships...');
+    if (Object.keys(tagsBySlug).length > 0) {
+      const trainerTagRelations = [
+        // Somchai (beginner instructor) - beginner, fitness
+        { trainer_id: '550e8400-e29b-41d4-a716-446655440101', tag_slug: 'beginner' },
+        { trainer_id: '550e8400-e29b-41d4-a716-446655440101', tag_slug: 'fitness' },
+        
+        // Niran (self-defense specialist) - self-defense, professional
+        { trainer_id: '550e8400-e29b-41d4-a716-446655440102', tag_slug: 'self-defense' },
+        { trainer_id: '550e8400-e29b-41d4-a716-446655440102', tag_slug: 'professional' },
+        
+        // Punya (advanced trainer) - professional, muay-khao
+        { trainer_id: '550e8400-e29b-41d4-a716-446655440103', tag_slug: 'professional' },
+        { trainer_id: '550e8400-e29b-41d4-a716-446655440103', tag_slug: 'muay-khao' },
+        
+        // Anong (fitness trainer) - beginner, fitness
+        { trainer_id: '550e8400-e29b-41d4-a716-446655440104', tag_slug: 'beginner' },
+        { trainer_id: '550e8400-e29b-41d4-a716-446655440104', tag_slug: 'fitness' },
+        
+        // Wichai (experienced trainer) - professional, muay-tae
+        { trainer_id: '550e8400-e29b-41d4-a716-446655440105', tag_slug: 'professional' },
+        { trainer_id: '550e8400-e29b-41d4-a716-446655440105', tag_slug: 'muay-tae' },
+        
+        // Kong (Tiger Muay Thai) - professional, muay-mat
+        { trainer_id: '550e8400-e29b-41d4-a716-446655440106', tag_slug: 'professional' },
+        { trainer_id: '550e8400-e29b-41d4-a716-446655440106', tag_slug: 'muay-mat' },
+        
+        // Fah (Fairtex) - professional, fitness
+        { trainer_id: '550e8400-e29b-41d4-a716-446655440107', tag_slug: 'professional' },
+        { trainer_id: '550e8400-e29b-41d4-a716-446655440107', tag_slug: 'fitness' },
+        
+        // Payu (Samui gym) - professional, muay-khao
+        { trainer_id: '550e8400-e29b-41d4-a716-446655440108', tag_slug: 'professional' },
+        { trainer_id: '550e8400-e29b-41d4-a716-446655440108', tag_slug: 'muay-khao' },
+        
+        // Sai (Eagle Muay Thai) - beginner, kids
+        { trainer_id: '550e8400-e29b-41d4-a716-446655440112', tag_slug: 'beginner' },
+        { trainer_id: '550e8400-e29b-41d4-a716-446655440112', tag_slug: 'kids' },
+        
+        // Khun (freelance) - professional, muay-tae
+        { trainer_id: '550e8400-e29b-41d4-a716-446655440118', tag_slug: 'professional' },
+        { trainer_id: '550e8400-e29b-41d4-a716-446655440118', tag_slug: 'muay-tae' },
+      ];
+      
+      const validTrainerTagRelations = trainerTagRelations
+        .map(rel => ({ trainer_id: rel.trainer_id, tag_id: tagsBySlug[rel.tag_slug] }))
+        .filter(rel => rel.tag_id !== undefined) as { trainer_id: string; tag_id: number }[];
+      
+      if (validTrainerTagRelations.length > 0) {
+        await db.insert(schema.trainerTags).values(validTrainerTagRelations).onConflictDoNothing();
+      }
+    }
 
     console.log('✅ Database seeding completed successfully!');
     return true;

@@ -10,7 +10,7 @@ export async function trainerRoutes(fastify: FastifyInstance) {
   fastify.get('/trainers', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       // Validate query parameters
-      const { page, pageSize, search, provinceId, gymId, isFreelance, includeInactive, includeClasses, unassignedOnly, sortField, sortBy } = trainerQuerySchema.parse(request.query);
+      const { page, pageSize, search, provinceId, gymId, isFreelance, includeInactive, includeClasses, includeTags, unassignedOnly, sortField, sortBy } = trainerQuerySchema.parse(request.query);
 
       const { trainers, total } = await trainerService.getAllTrainers(
         page, 
@@ -23,6 +23,7 @@ export async function trainerRoutes(fastify: FastifyInstance) {
         sortField, // Use from query parameters
         sortBy, // Use from query parameters  
         includeClasses, 
+        includeTags,
         unassignedOnly
       );
       const totalPages = Math.ceil(total / pageSize);

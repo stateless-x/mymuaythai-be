@@ -19,7 +19,7 @@ export const createGymSchema = z.object({
   youtube_url: urlSchema,
   line_id: lineIdSchema,
   tags: z.array(z.object({
-    id: z.string().uuid('Invalid tag ID format'),
+    id: z.number().int().positive('Invalid tag ID format'),
     name_th: z.string().min(1, 'Thai tag name is required'),
     name_en: z.string().min(1, 'English tag name is required'),
   })).optional(),
@@ -49,7 +49,7 @@ export const createTrainerSchema = z.object({
   province_id: z.number().int().positive('Province ID must be positive').optional(),
   exp_year: z.number().int().min(0, 'Experience years must be non-negative').max(100, 'Experience years too high').optional(),
   tags: z.array(z.object({
-    id: z.string().uuid('Invalid tag ID format'),
+    id: z.number().int().positive('Invalid tag ID format'),
     name_th: z.string().min(1, 'Thai tag name is required'),
     name_en: z.string().min(1, 'English tag name is required'),
   })).optional(),
@@ -140,6 +140,7 @@ export const trainerQuerySchema = paginationSchema.extend({
   isFreelance: z.string().transform((val) => val === 'true').pipe(z.boolean()).optional(),
   includeInactive: z.string().transform((val) => val === 'true').pipe(z.boolean()).optional(),
   includeClasses: z.string().transform((val) => val === 'true').pipe(z.boolean()).optional(),
+  includeTags: z.string().transform((val) => val === 'true').pipe(z.boolean()).optional(),
   unassignedOnly: z.string().transform((val) => val === 'true').pipe(z.boolean()).optional(),
   sortField: z.enum(['created_at', 'updated_at']).default('updated_at'),
   sortBy: z.enum(['asc', 'desc']).default('desc'),

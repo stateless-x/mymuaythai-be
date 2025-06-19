@@ -65,6 +65,7 @@ export async function getAllTrainers(
   sortField: 'created_at' | 'updated_at' = 'updated_at',
   sortBy: 'asc' | 'desc' = 'desc',
   includeClasses: boolean = false, 
+  includeTags: boolean = false,
   unassignedOnly: boolean = false
 ): Promise<{ trainers: TrainerWithDetails[], total: number }> {
   const offset = (page - 1) * pageSize;
@@ -182,11 +183,12 @@ export async function getAllTrainers(
   const totalResult = await totalQuery;
   const total = totalResult[0]?.value ?? 0;
 
-  // Optimized: Only fetch classes when needed and for specific use cases
+  // Optimized: Only fetch classes and tags when needed and for specific use cases
   const trainersWithDetailsList: TrainerWithDetails[] = [];
   
   for (const trainer of trainersResult) {
     let classes: TrainerClassWithDetails[] = [];
+    let tags: Tag[] = [];
     
     // Only load classes if explicitly requested (for admin views)
     if (includeClasses) {
@@ -215,12 +217,24 @@ export async function getAllTrainers(
       }));
     }
     
+    // Only load tags if explicitly requested
+    if (includeTags) {
+      // Get trainer's tags via trainerTags junction table
+      const trainerTagsRecords = await db.select({ tag_id: schema.trainerTags.tag_id })
+        .from(schema.trainerTags)
+        .where(eq(schema.trainerTags.trainer_id, trainer.id));
+      const tagIds = trainerTagsRecords.map(tt => tt.tag_id);
+      tags = tagIds.length > 0 
+        ? await db.select().from(schema.tags).where(inArray(schema.tags.id, tagIds))
+        : [];
+    }
+    
     const trainerWithDetails = mapRawTrainerToTrainerWithDetails(
       trainer, 
       trainer.provinceData as Province | null, 
       trainer.gymData as Gym | null,
       classes,
-      [] // Empty tags array for list view - can be extended later if needed
+      tags
     );
     
     trainersWithDetailsList.push(trainerWithDetails);
@@ -312,15 +326,15 @@ export async function getTrainerById(id: string, includeInactive: boolean = fals
 }
 
 export async function getTrainersByGym(gymId: string, page: number = 1, pageSize: number = 20, includeInactive: boolean = false, includeClasses: boolean = false): Promise<{ trainers: TrainerWithDetails[], total: number }> {
-  return getAllTrainers(page, pageSize, undefined, undefined, gymId, undefined, !includeInactive ? true : undefined, 'updated_at', 'desc', includeClasses, false);
+  return getAllTrainers(page, pageSize, undefined, undefined, gymId, undefined, !includeInactive ? true : undefined, 'updated_at', 'desc', includeClasses, false, false);
 }
 
 export async function getTrainersByProvince(provinceId: number, page: number = 1, pageSize: number = 20, includeInactive: boolean = false, includeClasses: boolean = false): Promise<{ trainers: TrainerWithDetails[], total: number }> {
-  return getAllTrainers(page, pageSize, undefined, provinceId, undefined, undefined, !includeInactive ? true : undefined, 'updated_at', 'desc', includeClasses, false);
+  return getAllTrainers(page, pageSize, undefined, provinceId, undefined, undefined, !includeInactive ? true : undefined, 'updated_at', 'desc', includeClasses, false, false);
 }
 
 export async function getFreelanceTrainers(page: number = 1, pageSize: number = 20, includeInactive: boolean = false, includeClasses: boolean = false): Promise<{ trainers: TrainerWithDetails[], total: number }> {
-  return getAllTrainers(page, pageSize, undefined, undefined, undefined, true, !includeInactive ? true : undefined, 'updated_at', 'desc', includeClasses, false);
+  return getAllTrainers(page, pageSize, undefined, undefined, undefined, true, !includeInactive ? true : undefined, 'updated_at', 'desc', includeClasses, false, false);
 }
 
 export async function getTrainerClasses(trainerId: string): Promise<Class[]> {
@@ -660,12 +674,12 @@ export async function searchTrainers(query: string, page: number = 1, pageSize: 
     return { trainers: [], total: 0 };
   }
   
-  return getAllTrainers(page, pageSize, query.trim(), undefined, undefined, isFreelance, !includeInactive ? true : undefined, 'updated_at', 'desc', includeClasses, false);
+  return getAllTrainers(page, pageSize, query.trim(), undefined, undefined, isFreelance, !includeInactive ? true : undefined, 'updated_at', 'desc', includeClasses, false, false);
 }
 
 // Add a new function specifically for getting unassigned trainers
 export async function getUnassignedTrainers(page: number = 1, pageSize: number = 20, includeInactive: boolean = false, includeClasses: boolean = false): Promise<{ trainers: TrainerWithDetails[], total: number }> {
-  return getAllTrainers(page, pageSize, undefined, undefined, undefined, undefined, !includeInactive ? true : undefined, 'updated_at', 'desc', includeClasses, true);
+  return getAllTrainers(page, pageSize, undefined, undefined, undefined, undefined, !includeInactive ? true : undefined, 'updated_at', 'desc', includeClasses, false, true);
 }
 
 // --- Trainer Class Management Functions ---
