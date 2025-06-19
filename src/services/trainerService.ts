@@ -62,7 +62,7 @@ export async function getAllTrainers(
   gymId?: string, 
   isFreelance?: boolean, 
   isActive?: boolean,
-  sortField: 'created_at' | 'updated_at' = 'created_at',
+  sortField: 'created_at' | 'updated_at' = 'updated_at',
   sortBy: 'asc' | 'desc' = 'desc',
   includeClasses: boolean = false, 
   unassignedOnly: boolean = false
@@ -156,6 +156,8 @@ export async function getAllTrainers(
   const sortColumn = sortField === 'updated_at' 
     ? schema.trainers.updated_at 
     : schema.trainers.created_at;
+  
+  const sortDirection = sortBy === 'asc' ? asc : desc;
 
   const trainersQuery = db.select({
     id: schema.trainers.id,
@@ -218,45 +220,8 @@ export async function getAllTrainers(
   .leftJoin(schema.gyms, eq(schema.trainers.gym_id, schema.gyms.id))
   .where(validWhereConditions.length > 0 ? and(...validWhereConditions) : undefined)
   .orderBy(
-    // If searching, order by relevance first, then by sort field
-    ...(searchTerm ? [
-      desc(sql`
-        CASE 
-          -- Exact matches in names get highest priority (score 100)
-          WHEN LOWER(${schema.trainers.first_name_th}) = ${searchTerm.toLowerCase()} THEN 100
-          WHEN LOWER(${schema.trainers.last_name_th}) = ${searchTerm.toLowerCase()} THEN 100
-          WHEN LOWER(${schema.trainers.first_name_en}) = ${searchTerm.toLowerCase()} THEN 100
-          WHEN LOWER(${schema.trainers.last_name_en}) = ${searchTerm.toLowerCase()} THEN 100
-          
-          -- Names starting with search term get high priority (score 80)
-          WHEN LOWER(${schema.trainers.first_name_th}) LIKE ${searchTerm.toLowerCase() + '%'} THEN 80
-          WHEN LOWER(${schema.trainers.last_name_th}) LIKE ${searchTerm.toLowerCase() + '%'} THEN 80
-          WHEN LOWER(${schema.trainers.first_name_en}) LIKE ${searchTerm.toLowerCase() + '%'} THEN 80
-          WHEN LOWER(${schema.trainers.last_name_en}) LIKE ${searchTerm.toLowerCase() + '%'} THEN 80
-          
-          -- Names containing search term get medium priority (score 60)
-          WHEN LOWER(${schema.trainers.first_name_th}) LIKE ${'%' + searchTerm.toLowerCase() + '%'} THEN 60
-          WHEN LOWER(${schema.trainers.last_name_th}) LIKE ${'%' + searchTerm.toLowerCase() + '%'} THEN 60
-          WHEN LOWER(${schema.trainers.first_name_en}) LIKE ${'%' + searchTerm.toLowerCase() + '%'} THEN 60
-          WHEN LOWER(${schema.trainers.last_name_en}) LIKE ${'%' + searchTerm.toLowerCase() + '%'} THEN 60
-          
-          -- Bio matches get lower priority (score 40)
-          WHEN LOWER(${schema.trainers.bio_th}) LIKE ${'%' + searchTerm.toLowerCase() + '%'} THEN 40
-          WHEN LOWER(${schema.trainers.bio_en}) LIKE ${'%' + searchTerm.toLowerCase() + '%'} THEN 40
-          
-          -- Province/gym matches get lowest priority (score 20)
-          WHEN LOWER(${schema.provinces.name_th}) LIKE ${'%' + searchTerm.toLowerCase() + '%'} THEN 20
-          WHEN LOWER(${schema.provinces.name_en}) LIKE ${'%' + searchTerm.toLowerCase() + '%'} THEN 20
-          WHEN LOWER(${schema.gyms.name_th}) LIKE ${'%' + searchTerm.toLowerCase() + '%'} THEN 20
-          WHEN LOWER(${schema.gyms.name_en}) LIKE ${'%' + searchTerm.toLowerCase() + '%'} THEN 20
-          
-          ELSE 0
-        END
-      `),
-      sortBy === 'asc' ? asc(sortColumn) : desc(sortColumn)
-    ] : [
-      sortBy === 'asc' ? asc(sortColumn) : desc(sortColumn)
-    ])
+    ...(searchTerm ? [desc(sql`relevance`)] : []),
+    sortDirection(sortColumn)
   )
   .limit(pageSize)
   .offset(offset);
@@ -402,15 +367,15 @@ export async function getTrainerById(id: string, includeInactive: boolean = fals
 }
 
 export async function getTrainersByGym(gymId: string, page: number = 1, pageSize: number = 20, includeInactive: boolean = false, includeClasses: boolean = false): Promise<{ trainers: TrainerWithDetails[], total: number }> {
-  return getAllTrainers(page, pageSize, undefined, undefined, gymId, undefined, !includeInactive ? true : undefined, 'created_at', 'desc', includeClasses, false);
+  return getAllTrainers(page, pageSize, undefined, undefined, gymId, undefined, !includeInactive ? true : undefined, 'updated_at', 'desc', includeClasses, false);
 }
 
 export async function getTrainersByProvince(provinceId: number, page: number = 1, pageSize: number = 20, includeInactive: boolean = false, includeClasses: boolean = false): Promise<{ trainers: TrainerWithDetails[], total: number }> {
-  return getAllTrainers(page, pageSize, undefined, provinceId, undefined, undefined, !includeInactive ? true : undefined, 'created_at', 'desc', includeClasses, false);
+  return getAllTrainers(page, pageSize, undefined, provinceId, undefined, undefined, !includeInactive ? true : undefined, 'updated_at', 'desc', includeClasses, false);
 }
 
 export async function getFreelanceTrainers(page: number = 1, pageSize: number = 20, includeInactive: boolean = false, includeClasses: boolean = false): Promise<{ trainers: TrainerWithDetails[], total: number }> {
-  return getAllTrainers(page, pageSize, undefined, undefined, undefined, true, !includeInactive ? true : undefined, 'created_at', 'desc', includeClasses, false);
+  return getAllTrainers(page, pageSize, undefined, undefined, undefined, true, !includeInactive ? true : undefined, 'updated_at', 'desc', includeClasses, false);
 }
 
 export async function getTrainerClasses(trainerId: string): Promise<Class[]> {
@@ -734,12 +699,12 @@ export async function searchTrainers(query: string, page: number = 1, pageSize: 
     return { trainers: [], total: 0 };
   }
   
-  return getAllTrainers(page, pageSize, query.trim(), undefined, undefined, isFreelance, !includeInactive ? true : undefined, 'created_at', 'desc', includeClasses, false);
+  return getAllTrainers(page, pageSize, query.trim(), undefined, undefined, isFreelance, !includeInactive ? true : undefined, 'updated_at', 'desc', includeClasses, false);
 }
 
 // Add a new function specifically for getting unassigned trainers
 export async function getUnassignedTrainers(page: number = 1, pageSize: number = 20, includeInactive: boolean = false, includeClasses: boolean = false): Promise<{ trainers: TrainerWithDetails[], total: number }> {
-  return getAllTrainers(page, pageSize, undefined, undefined, undefined, undefined, !includeInactive ? true : undefined, 'created_at', 'desc', includeClasses, true);
+  return getAllTrainers(page, pageSize, undefined, undefined, undefined, undefined, !includeInactive ? true : undefined, 'updated_at', 'desc', includeClasses, true);
 }
 
 // --- Trainer Class Management Functions ---

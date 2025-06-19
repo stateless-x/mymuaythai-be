@@ -141,6 +141,8 @@ export const trainerQuerySchema = paginationSchema.extend({
   includeInactive: z.string().transform((val) => val === 'true').pipe(z.boolean()).optional(),
   includeClasses: z.string().transform((val) => val === 'true').pipe(z.boolean()).optional(),
   unassignedOnly: z.string().transform((val) => val === 'true').pipe(z.boolean()).optional(),
+  sortField: z.enum(['created_at', 'updated_at']).default('updated_at'),
+  sortBy: z.enum(['asc', 'desc']).default('desc'),
 });
 
 export const gymByIdQuerySchema = z.object({
