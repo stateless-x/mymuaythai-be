@@ -3,33 +3,36 @@ import * as tagService from '../services/tagService';
 import { ApiResponse, PaginatedResponse, Tag, NewTag } from '../types';
 
 export async function tagRoutes(fastify: FastifyInstance) {
-  // Get all tags with pagination
+  // Get all tags with pagination and search
   fastify.get('/tags', async (request: FastifyRequest<{
     Querystring: { 
       page?: string;
       pageSize?: string;
+      searchTerm?: string;
+      sortField?: 'name_th' | 'name_en' | 'id';
+      sortBy?: 'asc' | 'desc';
       stats?: string;
     }
   }>, reply: FastifyReply) => {
     try {
       const page = parseInt(request.query.page || '1');
       const pageSize = parseInt(request.query.pageSize || '20');
+      const searchTerm = request.query.searchTerm;
+      const sortField = request.query.sortField || 'name_en';
+      const sortBy = request.query.sortBy || 'asc';
       const includeStats = request.query.stats === 'true';
       
-      if (includeStats) {
-        const tagsWithStats = await tagService.getAllTagsWithStats();
-        const response: ApiResponse<typeof tagsWithStats> = {
-          success: true,
-          data: tagsWithStats,
-          message: 'Tags with usage statistics retrieved successfully'
-        };
-        return reply.code(200).send(response);
-      }
-      
-      const { tags, total } = await tagService.getAllTags(page, pageSize);
+      // Use the new paginated function that includes search and stats
+      const { tags, total } = await tagService.getTagsPaginated(
+        page, 
+        pageSize, 
+        searchTerm, 
+        sortField, 
+        sortBy
+      );
       const totalPages = Math.ceil(total / pageSize);
       
-      const response: ApiResponse<PaginatedResponse<Tag>> = {
+      const response: ApiResponse<PaginatedResponse<typeof tags[0]>> = {
         success: true,
         data: {
           items: tags,
@@ -38,7 +41,7 @@ export async function tagRoutes(fastify: FastifyInstance) {
           pageSize,
           totalPages
         },
-        message: 'Tags retrieved successfully'
+        message: searchTerm ? `Found ${total} tags matching "${searchTerm}"` : 'Tags retrieved successfully'
       };
       return reply.code(200).send(response);
     } catch (error) {

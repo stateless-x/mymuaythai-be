@@ -123,36 +123,31 @@ export async function updateTag(id: number, updateData: Partial<Omit<NewTag, 'id
   return updatedTags[0] || null;
 }
 
-// Delete tag
+// Delete tag (cascading deletion - removes all associations)
 export async function deleteTag(id: number): Promise<boolean> {
-  // First check if tag is being used
-  const gymTagsCount = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(schema.gymTags)
-    .where(eq(schema.gymTags.tag_id, id));
-  
-  const trainerTagsCount = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(schema.trainerTags)
-    .where(eq(schema.trainerTags.tag_id, id));
-  
-  const gymUsageCount = gymTagsCount[0] ? Number(gymTagsCount[0].count) : 0;
-  const trainerUsageCount = trainerTagsCount[0] ? Number(trainerTagsCount[0].count) : 0;
-  
-  if (gymUsageCount > 0 || trainerUsageCount > 0) {
-    throw new Error(`Cannot delete tag: it is currently used by ${gymUsageCount} gyms and ${trainerUsageCount} trainers`);
-  }
-  
-  const deletedTags = await db
-    .delete(schema.tags)
-    .where(eq(schema.tags.id, id))
-    .returning();
-  
-  return deletedTags.length > 0;
+  return await db.transaction(async (tx) => {
+    // First, delete all gym-tag associations
+    await tx
+      .delete(schema.gymTags)
+      .where(eq(schema.gymTags.tag_id, id));
+    
+    // Then, delete all trainer-tag associations  
+    await tx
+      .delete(schema.trainerTags)
+      .where(eq(schema.trainerTags.tag_id, id));
+    
+    // Finally, delete the tag itself
+    const deletedTags = await tx
+      .delete(schema.tags)
+      .where(eq(schema.tags.id, id))
+      .returning();
+    
+    return deletedTags.length > 0;
+  });
 }
 
-// Search tags by name (Thai or English)
-export async function searchTags(query: string, page: number = 1, pageSize: number = 20): Promise<{ tags: Tag[], total: number }> {
+// Search tags by name (Thai or English) with usage stats
+export async function searchTags(query: string, page: number = 1, pageSize: number = 20): Promise<{ tags: (Tag & { gymCount: number, trainerCount: number })[], total: number }> {
   const offset = (page - 1) * pageSize;
   const searchPattern = `%${query}%`;
   
@@ -183,7 +178,68 @@ export async function searchTags(query: string, page: number = 1, pageSize: numb
   
   const total = totalResult[0] ? Number(totalResult[0].count) : 0;
   
-  return { tags, total };
+  // Add usage statistics to each tag
+  const tagsWithStats = await Promise.all(
+    tags.map(async (tag) => {
+      const stats = await getTagUsageStats(tag.id);
+      return {
+        ...tag,
+        gymCount: stats?.gymCount || 0,
+        trainerCount: stats?.trainerCount || 0
+      };
+    })
+  );
+  
+  return { tags: tagsWithStats, total };
+}
+
+// Get paginated tags with search and usage stats
+export async function getTagsPaginated(
+  page: number = 1,
+  pageSize: number = 20,
+  searchTerm?: string,
+  sortField: 'name_th' | 'name_en' | 'id' = 'name_en',
+  sortBy: 'asc' | 'desc' = 'asc'
+): Promise<{ tags: (Tag & { gymCount: number, trainerCount: number })[], total: number }> {
+  
+  // If search term provided, use search function
+  if (searchTerm && searchTerm.trim()) {
+    return searchTags(searchTerm.trim(), page, pageSize);
+  }
+  
+  // Otherwise, use regular pagination
+  const offset = (page - 1) * pageSize;
+  
+  const sortColumn = sortField === 'name_th' ? schema.tags.name_th : 
+                    sortField === 'id' ? schema.tags.id : 
+                    schema.tags.name_en;
+  
+  const tags = await db
+    .select()
+    .from(schema.tags)
+    .limit(pageSize)
+    .offset(offset)
+    .orderBy(sortBy === 'desc' ? sql`${sortColumn} DESC` : sortColumn);
+  
+  const totalResult = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(schema.tags);
+  
+  const total = totalResult[0] ? Number(totalResult[0].count) : 0;
+  
+  // Add usage statistics to each tag
+  const tagsWithStats = await Promise.all(
+    tags.map(async (tag) => {
+      const stats = await getTagUsageStats(tag.id);
+      return {
+        ...tag,
+        gymCount: stats?.gymCount || 0,
+        trainerCount: stats?.trainerCount || 0
+      };
+    })
+  );
+  
+  return { tags: tagsWithStats, total };
 }
 
 // Get tag usage statistics
