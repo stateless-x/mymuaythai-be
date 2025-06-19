@@ -50,7 +50,7 @@ export async function getAllTags(page: number = 1, pageSize: number = 20): Promi
     .from(schema.tags)
     .limit(pageSize)
     .offset(offset)
-    .orderBy(schema.tags.name_en);
+    .orderBy(sql`${schema.tags.updated_at} DESC`);
   
   const totalResult = await db
     .select({ count: sql<number>`count(*)` })
@@ -116,6 +116,7 @@ export async function updateTag(id: number, updateData: Partial<Omit<NewTag, 'id
     .set({
       ...updateData,
       ...(slug && { slug }),
+      updated_at: sql`NOW()`, // Update timestamp
     })
     .where(eq(schema.tags.id, id))
     .returning();
@@ -163,7 +164,7 @@ export async function searchTags(query: string, page: number = 1, pageSize: numb
     )
     .limit(pageSize)
     .offset(offset)
-    .orderBy(schema.tags.name_en);
+    .orderBy(sql`${schema.tags.updated_at} DESC`);
   
   const totalResult = await db
     .select({ count: sql<number>`count(*)` })
@@ -198,11 +199,11 @@ export async function getTagsPaginated(
   page: number = 1,
   pageSize: number = 20,
   searchTerm?: string,
-  sortField: 'name_th' | 'name_en' | 'id' = 'name_en',
-  sortBy: 'asc' | 'desc' = 'asc'
+  sortField: 'name_th' | 'name_en' | 'id' | 'updated_at' | 'created_at' = 'updated_at',
+  sortBy: 'asc' | 'desc' = 'desc'
 ): Promise<{ tags: (Tag & { gymCount: number, trainerCount: number })[], total: number }> {
   
-  // If search term provided, use search function
+  // If search term provided, use search function (but with updated sorting)
   if (searchTerm && searchTerm.trim()) {
     return searchTags(searchTerm.trim(), page, pageSize);
   }
@@ -211,7 +212,9 @@ export async function getTagsPaginated(
   const offset = (page - 1) * pageSize;
   
   const sortColumn = sortField === 'name_th' ? schema.tags.name_th : 
-                    sortField === 'id' ? schema.tags.id : 
+                    sortField === 'id' ? schema.tags.id :
+                    sortField === 'created_at' ? schema.tags.created_at :
+                    sortField === 'updated_at' ? schema.tags.updated_at :
                     schema.tags.name_en;
   
   const tags = await db
@@ -268,7 +271,7 @@ export async function getAllTagsWithStats(): Promise<(Tag & { gymCount: number, 
   const tags = await db
     .select()
     .from(schema.tags)
-    .orderBy(schema.tags.name_en);
+    .orderBy(sql`${schema.tags.updated_at} DESC`);
   
   const tagsWithStats = await Promise.all(
     tags.map(async (tag) => {

@@ -9,7 +9,7 @@ export async function tagRoutes(fastify: FastifyInstance) {
       page?: string;
       pageSize?: string;
       searchTerm?: string;
-      sortField?: 'name_th' | 'name_en' | 'id';
+      sortField?: 'name_th' | 'name_en' | 'id' | 'updated_at' | 'created_at';
       sortBy?: 'asc' | 'desc';
       stats?: string;
     }
@@ -18,8 +18,8 @@ export async function tagRoutes(fastify: FastifyInstance) {
       const page = parseInt(request.query.page || '1');
       const pageSize = parseInt(request.query.pageSize || '20');
       const searchTerm = request.query.searchTerm;
-      const sortField = request.query.sortField || 'name_en';
-      const sortBy = request.query.sortBy || 'asc';
+      const sortField = request.query.sortField || 'updated_at';
+      const sortBy = request.query.sortBy || 'desc';
       const includeStats = request.query.stats === 'true';
       
       // Use the new paginated function that includes search and stats

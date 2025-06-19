@@ -89,6 +89,8 @@ export const tags = pgTable('tags', {
   slug: text('slug').notNull().unique(),
   name_th: text('name_th').notNull(),
   name_en: text('name_en').notNull(),
+  created_at: timestamp('created_at').defaultNow().notNull(),
+  updated_at: timestamp('updated_at').defaultNow().notNull(),
 });
 
 export const gymTags = pgTable('gym_tags', {
