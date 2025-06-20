@@ -43,6 +43,13 @@
       "when": 1750344506120,
       "tag": "0005_charming_centennial",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1750389691560,
+      "tag": "0006_steep_major_mapleleaf",
+      "breakpoints": true
     }
   ]
 }

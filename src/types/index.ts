@@ -7,6 +7,9 @@ import * as schema from '../db/schema';
 export type User = typeof schema.users.$inferSelect;
 export type NewUser = typeof schema.users.$inferInsert;
 
+export type AdminUser = typeof schema.adminUsers.$inferSelect;
+export type NewAdminUser = typeof schema.adminUsers.$inferInsert;
+
 export type Province = typeof schema.provinces.$inferSelect;
 export type NewProvince = typeof schema.provinces.$inferInsert;
 
@@ -150,7 +153,7 @@ export interface TrainerClassWithDetails {
   class: Class | null;
 }
 
-export type NewTrainerClass = Omit<TrainerClass, 'id' | 'created_at' | 'updated_at'>;
+
 
 // --- Paginated Response ---
 export interface PaginatedResponse<T> {

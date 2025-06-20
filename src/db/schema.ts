@@ -9,6 +9,16 @@ export const users = pgTable('users', {
   email: text('email').notNull(), // Assuming email should be notNull based on typical usage
 });
 
+export const adminUsers = pgTable('admin_users', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  email: text('email').notNull().unique(),
+  password: text('password').notNull(),
+  role: text('role', { enum: ['admin', 'staff'] }).notNull().default('staff'),
+  is_active: boolean('is_active').default(true).notNull(),
+  created_at: timestamp('created_at').defaultNow().notNull(),
+  updated_at: timestamp('updated_at').defaultNow().notNull(),
+});
+
 export const provinces = pgTable('provinces', {
   id: serial('id').primaryKey(),
   name_th: text('name_th').notNull(),
@@ -108,6 +118,8 @@ export const trainerTags = pgTable('trainer_tags', {
 // --- RELATIONS ---
 
 export const userRelations = relations(users, ({ many }) => ({}));
+
+export const adminUserRelations = relations(adminUsers, ({ many }) => ({}));
 
 export const provinceRelations = relations(provinces, ({ many }) => ({
   gyms: many(gyms),

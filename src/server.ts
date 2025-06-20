@@ -12,6 +12,7 @@ import { provinceRoutes } from './routes/provinces';
 import { tagRoutes } from './routes/tags';
 import { healthRoutes } from './routes/health';
 import { dashboardRoutes } from './routes/dashboard';
+import adminUsersRoutes from './routes/adminUsers';
 import { checkDatabaseConnection } from './db/config';
 import { 
   env, 
@@ -129,6 +130,7 @@ fastify.register(async (fastify) => {
   await fastify.register(provinceRoutes, { prefix: '/api' });
   await fastify.register(tagRoutes, { prefix: '/api' });
   await fastify.register(dashboardRoutes, { prefix: '/api' });
+  await fastify.register(adminUsersRoutes, { prefix: '/api' });
 });
 
 // Register error handler
