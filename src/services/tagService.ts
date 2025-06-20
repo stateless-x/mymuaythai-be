@@ -41,26 +41,6 @@ async function generateUniqueSlug(nameEn: string, excludeId?: number): Promise<s
   return slug;
 }
 
-// Get all tags with pagination
-export async function getAllTags(page: number = 1, pageSize: number = 20): Promise<{ tags: Tag[], total: number }> {
-  const offset = (page - 1) * pageSize;
-  
-  const tags = await db
-    .select()
-    .from(schema.tags)
-    .limit(pageSize)
-    .offset(offset)
-    .orderBy(sql`${schema.tags.updated_at} DESC`);
-  
-  const totalResult = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(schema.tags);
-  
-  const total = totalResult[0] ? Number(totalResult[0].count) : 0;
-  
-  return { tags, total };
-}
-
 // Get tag by ID
 export async function getTagById(id: number): Promise<Tag | null> {
   const tags = await db

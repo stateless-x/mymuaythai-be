@@ -78,7 +78,7 @@ export interface GymWithDetails {
   created_at: Date;
   updated_at: Date;
   province: Province | null;
-  images?: GymImage[];
+  images: GymImage[];
   tags?: Tag[]; // via gymTags
   // Direct classes link for a gym is not in ERD, only via trainers.
   // If gyms can offer classes directly, a gym_classes table would be needed.
@@ -101,17 +101,7 @@ export interface CreateTrainerRequest extends Omit<NewTrainer, 'id' | 'created_a
   }>;
 }
 
-export interface UpdateTrainerRequest extends Partial<Omit<NewTrainer, 'id' | 'created_at' | 'updated_at'>> {
-  tags?: Tag[];
-  classes?: Array<{
-    name: { th: string; en: string };
-    description: { th: string; en: string };
-    duration: number;
-    maxStudents: number;
-    price: number;
-    isActive?: boolean;
-  }>;
-}
+export interface UpdateTrainerRequest extends Partial<Omit<CreateTrainerRequest, 'id' | 'created_at' | 'updated_at'>> {}
 
 export interface TrainerWithDetails {
   id: string;
@@ -157,26 +147,10 @@ export interface TrainerClassWithDetails {
   is_private_class: boolean;
   created_at: Date;
   updated_at: Date;
-  class?: Class | null; // Reference to standard class if class_id exists
+  class: Class | null;
 }
 
-// Request types for creating/updating trainer classes
-export interface CreateTrainerClassRequest {
-  trainer_id: string;
-  class_id?: string; // Optional for private classes
-  name_th?: string;
-  name_en?: string;
-  description_th?: string;
-  description_en?: string;
-  duration_minutes?: number;
-  max_students?: number;
-  price?: number;
-  is_private_class?: boolean;
-}
-
-export interface UpdateTrainerClassRequest extends Partial<Omit<CreateTrainerClassRequest, 'trainer_id'>> {
-  is_active?: boolean;
-}
+export type NewTrainerClass = Omit<TrainerClass, 'id' | 'created_at' | 'updated_at'>;
 
 // --- Paginated Response ---
 export interface PaginatedResponse<T> {
