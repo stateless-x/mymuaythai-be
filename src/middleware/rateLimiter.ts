@@ -11,7 +11,7 @@ const rateLimitStore = new Map<string, RateLimitEntry>();
 
 // Rate limit configurations
 const RATE_LIMITS = {
-  login: { max: 5, windowMs: 15 * 60 * 1000 }, // 5 attempts per 15 minutes
+  login: { max: 5, windowMs: 5 * 60 * 1000 }, // 5 attempts per 5 minutes
   api: { max: 100, windowMs: 60 * 1000 }, // 100 requests per minute
   adminActions: { max: 50, windowMs: 60 * 1000 }, // 50 admin actions per minute
 };
