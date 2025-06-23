@@ -33,7 +33,7 @@ const envSchema = z.object({
   // Optional configurations
   REDIS_URL: z.string().url().optional(),
   SENTRY_DSN: z.string().url().optional(),
-  JWT_SECRET: z.string().min(32).optional(),
+  JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
 });
 
 // Validate environment variables

@@ -238,8 +238,13 @@ export async function authenticateAdminUser(email: string, password: string): Pr
 
   // Get user with password
   const userWithPassword = await getAdminUserByEmail(email);
-  if (!userWithPassword || !userWithPassword.is_active) {
+  if (!userWithPassword) {
     return null;
+  }
+
+  // Check if user is inactive
+  if (!userWithPassword.is_active) {
+    throw new Error('Account is inactive');
   }
 
   // Verify password

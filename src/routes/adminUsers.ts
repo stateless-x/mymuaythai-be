@@ -1,5 +1,8 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import * as adminUserService from '../services/adminUserService';
+import { AuthService } from '../services/authService';
+import { authenticateToken, requireAuth, requireAdmin } from '../middleware/authMiddleware';
+import { loginRateLimit, adminRateLimit } from '../middleware/rateLimiter';
 
 interface CreateAdminUserBody {
   email: string;
@@ -24,8 +27,8 @@ interface AdminUserParams {
 }
 
 export default async function adminUsersRoutes(fastify: FastifyInstance) {
-  // Get all admin users
-  fastify.get('/admin-users', async (request: FastifyRequest, reply: FastifyReply) => {
+  // Get all admin users (requires authentication)
+  fastify.get('/admin-users', { preHandler: [authenticateToken, requireAuth] }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const users = await adminUserService.getAllAdminUsers();
       reply.send({
@@ -41,8 +44,8 @@ export default async function adminUsersRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // Get admin user by ID
-  fastify.get<{ Params: AdminUserParams }>('/admin-users/:id', async (request, reply) => {
+  // Get admin user by ID (requires authentication)
+  fastify.get<{ Params: AdminUserParams }>('/admin-users/:id', { preHandler: [authenticateToken, requireAuth] }, async (request, reply) => {
     try {
       const { id } = request.params;
       const user = await adminUserService.getAdminUserById(id);
@@ -68,8 +71,8 @@ export default async function adminUsersRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // Create admin user
-  fastify.post<{ Body: CreateAdminUserBody }>('/admin-users', async (request, reply) => {
+  // Create admin user (requires admin privileges)
+  fastify.post<{ Body: CreateAdminUserBody }>('/admin-users', { preHandler: [authenticateToken, requireAdmin, adminRateLimit] }, async (request, reply) => {
     try {
       const userData = request.body;
       const newUser = await adminUserService.createAdminUser(userData);
@@ -114,8 +117,8 @@ export default async function adminUsersRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // Update admin user
-  fastify.put<{ Params: AdminUserParams; Body: UpdateAdminUserBody }>('/admin-users/:id', async (request, reply) => {
+  // Update admin user (requires admin privileges)
+  fastify.put<{ Params: AdminUserParams; Body: UpdateAdminUserBody }>('/admin-users/:id', { preHandler: [authenticateToken, requireAdmin] }, async (request, reply) => {
     try {
       const { id } = request.params;
       const userData = request.body;
@@ -170,8 +173,8 @@ export default async function adminUsersRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // Delete admin user
-  fastify.delete<{ Params: AdminUserParams }>('/admin-users/:id', async (request, reply) => {
+  // Delete admin user (requires admin privileges)
+  fastify.delete<{ Params: AdminUserParams }>('/admin-users/:id', { preHandler: [authenticateToken, requireAdmin] }, async (request, reply) => {
     try {
       const { id } = request.params;
       const deleted = await adminUserService.deleteAdminUser(id);
@@ -206,8 +209,10 @@ export default async function adminUsersRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // Login endpoint
-  fastify.post<{ Body: AuthLoginBody }>('/admin-users/login', async (request, reply) => {
+  // Login endpoint (public - no authentication required)
+  fastify.post<{ Body: AuthLoginBody }>('/admin-users/login', { 
+    config: { compress: false } 
+  }, async (request, reply) => {
     try {
       const { email, password } = request.body;
       const user = await adminUserService.authenticateAdminUser(email, password);
@@ -220,13 +225,42 @@ export default async function adminUsersRoutes(fastify: FastifyInstance) {
         return;
       }
 
-      reply.send({
+      // Generate JWT tokens
+      const accessToken = AuthService.generateAccessToken(user);
+      const refreshToken = AuthService.generateRefreshToken(user);
+
+      const successResponse = {
         success: true,
-        data: user,
+        data: {
+          user: {
+            id: user.id,
+            email: user.email,
+            role: user.role,
+            is_active: user.is_active,
+          },
+          accessToken,
+          refreshToken,
+          expiresAt: AuthService.getTokenExpiration(accessToken),
+        },
         message: 'Login successful',
-      });
-    } catch (error) {
+      };
+      
+      // Disable compression for this response to avoid stream issues
+      reply.header('Content-Encoding', 'identity');
+      reply.type('application/json');
+      reply.send(successResponse);
+    } catch (error: any) {
       fastify.log.error(error);
+      
+      // Handle specific errors
+      if (error.message === 'Account is inactive') {
+        reply.status(403).send({
+          success: false,
+          error: 'Account is inactive',
+        });
+        return;
+      }
+      
       reply.status(500).send({
         success: false,
         error: 'Internal server error',
@@ -234,8 +268,8 @@ export default async function adminUsersRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // Get user stats
-  fastify.get('/admin-users/stats/count', async (request, reply) => {
+  // Get user stats (requires authentication)
+  fastify.get('/admin-users/stats/count', { preHandler: [authenticateToken, requireAuth] }, async (request, reply) => {
     try {
       const adminCount = await adminUserService.getAdminCount();
       const totalCount = await adminUserService.getTotalUserCount();
@@ -254,4 +288,88 @@ export default async function adminUsersRoutes(fastify: FastifyInstance) {
       });
     }
   });
+
+  // Refresh token endpoint (public - no authentication required)
+  fastify.post<{ Body: { refreshToken: string } }>('/admin-users/refresh', async (request, reply) => {
+    try {
+      const { refreshToken } = request.body;
+      
+      if (!refreshToken) {
+        reply.status(400).send({
+          success: false,
+          error: 'Refresh token is required',
+        });
+        return;
+      }
+
+      const tokenData = AuthService.verifyRefreshToken(refreshToken);
+      
+      if (!tokenData) {
+        reply.status(401).send({
+          success: false,
+          error: 'Invalid refresh token',
+        });
+        return;
+      }
+
+      // Get user to generate new tokens
+      const user = await adminUserService.getAdminUserById(tokenData.userId);
+      
+      if (!user || !user.is_active) {
+        reply.status(401).send({
+          success: false,
+          error: 'User not found or inactive',
+        });
+        return;
+      }
+
+      // Generate new tokens
+      const newAccessToken = AuthService.generateAccessToken(user);
+      const newRefreshToken = AuthService.generateRefreshToken(user);
+
+      reply.send({
+        success: true,
+        data: {
+          accessToken: newAccessToken,
+          refreshToken: newRefreshToken,
+          expiresAt: AuthService.getTokenExpiration(newAccessToken),
+        },
+        message: 'Tokens refreshed successfully',
+      });
+    } catch (error) {
+      fastify.log.error(error);
+      reply.status(500).send({
+        success: false,
+        error: 'Internal server error',
+      });
+    }
+  });
+
+  // Logout endpoint (requires authentication) - Support both POST and GET
+  const logoutHandler = async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const authHeader = request.headers.authorization;
+      const token = AuthService.extractTokenFromHeader(authHeader);
+      
+      if (token) {
+        // Blacklist the current token
+        AuthService.blacklistToken(token);
+      }
+
+      reply.send({
+        success: true,
+        message: 'Logged out successfully',
+      });
+    } catch (error) {
+      fastify.log.error(error);
+      reply.status(500).send({
+        success: false,
+        error: 'Internal server error',
+      });
+    }
+  };
+
+  // Support both POST and GET for logout
+  fastify.post('/admin-users/logout', { preHandler: [authenticateToken] }, logoutHandler);
+  fastify.get('/admin-users/logout', { preHandler: [authenticateToken] }, logoutHandler);
 } 
