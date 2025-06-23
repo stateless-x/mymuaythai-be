@@ -46,7 +46,7 @@ fastify.register(helmet, {
   contentSecurityPolicy: false,
 });
 
-// Rate limiting
+// Global rate limiting (for general API endpoints)
 fastify.register(rateLimit, {
   max: rateLimitConfig.max,
   timeWindow: rateLimitConfig.timeWindow,
@@ -130,7 +130,28 @@ fastify.register(async (fastify) => {
   await fastify.register(provinceRoutes, { prefix: '/api' });
   await fastify.register(tagRoutes, { prefix: '/api' });
   await fastify.register(dashboardRoutes, { prefix: '/api' });
-  await fastify.register(adminUsersRoutes, { prefix: '/api' });
+  
+  // Admin routes with stricter rate limiting for login
+  await fastify.register(async (adminFastify) => {
+    await adminFastify.register(rateLimit, {
+      max: 5, // 5 login attempts per window
+      timeWindow: rateLimitConfig.timeWindow,
+      keyGenerator: (request) => `login:${request.ip}`,
+      errorResponseBuilder: function (request, context) {
+        return {
+          success: false,
+          error: 'Too many login attempts',
+          message: `Rate limit exceeded. Try again in ${Math.ceil(context.ttl / 1000)} seconds.`,
+          statusCode: 429,
+          retryAfter: context.ttl,
+        };
+      },
+      // Only apply to login endpoints
+      allowList: (request) => !request.url.includes('/login'),
+    });
+    
+    await adminFastify.register(adminUsersRoutes);
+  }, { prefix: '/api' });
 });
 
 // Register error handler

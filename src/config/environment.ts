@@ -25,7 +25,7 @@ const envSchema = z.object({
   
   // Rate limiting
   RATE_LIMIT_MAX: z.string().regex(/^\d+$/).transform(Number).default('100'),
-  RATE_LIMIT_WINDOW: z.string().default('15 minutes'),
+  RATE_LIMIT_WINDOW: z.string().default('5 minutes'),
   
   // Logging
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
