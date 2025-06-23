@@ -2,7 +2,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import * as adminUserService from '../services/adminUserService';
 import { AuthService } from '../services/authService';
 import { authenticateToken, requireAuth, requireAdmin } from '../middleware/authMiddleware';
-import { loginRateLimit, adminRateLimit } from '../middleware/rateLimiter';
+import { loginRateLimit, adminRateLimit, apiRateLimit } from '../middleware/rateLimiter';
 
 interface CreateAdminUserBody {
   email: string;
@@ -211,7 +211,8 @@ export default async function adminUsersRoutes(fastify: FastifyInstance) {
 
   // Login endpoint (public - no authentication required)
   fastify.post<{ Body: AuthLoginBody }>('/admin-users/login', { 
-    config: { compress: false } 
+    config: { compress: false },
+    preHandler: loginRateLimit
   }, async (request, reply) => {
     try {
       const { email, password } = request.body;
@@ -290,7 +291,9 @@ export default async function adminUsersRoutes(fastify: FastifyInstance) {
   });
 
   // Refresh token endpoint (public - no authentication required)
-  fastify.post<{ Body: { refreshToken: string } }>('/admin-users/refresh', async (request, reply) => {
+  fastify.post<{ Body: { refreshToken: string } }>('/admin-users/refresh', { 
+    preHandler: apiRateLimit 
+  }, async (request, reply) => {
     try {
       const { refreshToken } = request.body;
       
