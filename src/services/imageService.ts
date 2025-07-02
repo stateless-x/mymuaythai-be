@@ -12,10 +12,7 @@ const BUNNY_STORAGE_BASE_URL =
   `https://${STORAGE_HOST}/${process.env.BUNNY_STORAGE_ZONE_NAME}`;
 const PUBLIC_CDN_URL = "https://mymuaythai.b-cdn.net";
 
-// Optional: Bunny API key for purge (different from storage password)
-const BUNNY_API_KEY = process.env.BUNNY_API_KEY;
 
-// Constants for validation
 const ALLOWED_MIME_TYPES = [
   'image/jpeg',
   'image/png',
@@ -73,9 +70,6 @@ async function uploadToBunny(folder: string, processedBuffer: Buffer, fileName?:
   }
 
   const cdnUrl = `${PUBLIC_CDN_URL}/${folder}/${finalFileName}`;
-
-  // Purge cached version so new image is visible immediately
-  purgeBunnyCdn(cdnUrl);
 
   return cdnUrl;
 }
@@ -166,28 +160,5 @@ export async function deleteImageFromBunny(cdnUrl: string): Promise<void> {
 
   if (!response.ok) {
     console.error('Failed to delete image from BunnyCDN:', response.status, await response.text())
-  }
-
-  // Purge any cached copy
-  purgeBunnyCdn(cdnUrl);
-}
-
-async function purgeBunnyCdn(url: string) {
-  if (!BUNNY_API_KEY) return;
-  try {
-    const purgeEndpoint = `https://api.bunny.net/purge`;
-    const response = await fetch(purgeEndpoint, {
-      method: 'POST',
-      headers: {
-        AccessKey: BUNNY_API_KEY,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ url }),
-    });
-    if (!response.ok) {
-      console.warn('Bunny CDN purge failed:', response.status, await response.text());
-    }
-  } catch (err) {
-    console.warn('Bunny CDN purge failed:', (err as any)?.message || err);
   }
 }
