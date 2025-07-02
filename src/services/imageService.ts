@@ -2,9 +2,9 @@ import sharp from 'sharp';
 import { randomUUID } from 'crypto';
 import type { MultipartFile } from '@fastify/multipart';
 
-// TEMP: fall back to hard-coded credentials if env vars are not set
-const DEFAULT_STORAGE_ZONE = 'mymuaythai';
-const DEFAULT_API_KEY = '';
+// Environment variables
+const BUNNY_STORAGE_ZONE_NAME = process.env.BUNNY_STORAGE_ZONE_NAME;
+const BUNNY_STORAGE_API_KEY = process.env.BUNNY_STORAGE_API_KEY;
 
 const STORAGE_HOST = 'sg.storage.bunnycdn.com';
 
@@ -44,15 +44,16 @@ async function processImage(buffer: Buffer): Promise<Buffer> {
  * Uploads a file buffer to BunnyCDN Storage.
  * @param folder The folder to upload into.
  * @param processedBuffer The processed image buffer.
+ * @param fileName Optional custom file name
  * @returns The public CDN URL of the uploaded file.
  */
-async function uploadToBunny(folder: string, processedBuffer: Buffer): Promise<string> {
+async function uploadToBunny(folder: string, processedBuffer: Buffer, fileName?: string): Promise<string> {
   if (!BUNNY_STORAGE_ZONE_NAME || !BUNNY_STORAGE_API_KEY) {
     throw new Error('BunnyCDN credentials are not configured in environment variables.');
   }
 
-  const fileName = `${randomUUID()}.webp`;
-  const uploadUrl = `${BUNNY_STORAGE_BASE_URL}/${folder}/${fileName}`;
+  const finalFileName = fileName ?? `${randomUUID()}.webp`;
+  const uploadUrl = `${BUNNY_STORAGE_BASE_URL}/${folder}/${finalFileName}`;
 
   console.log('Uploading to:', uploadUrl);
   console.log('Key starts with:', BUNNY_STORAGE_API_KEY.slice(0, 6));
@@ -72,7 +73,7 @@ async function uploadToBunny(folder: string, processedBuffer: Buffer): Promise<s
     throw new Error(`Failed to upload image to BunnyCDN: ${response.status} ${response.statusText}`);
   }
 
-  return `${PUBLIC_CDN_URL}/${folder}/${fileName}`;
+  return `${PUBLIC_CDN_URL}/${folder}/${finalFileName}`;
 }
 
 /**
@@ -93,9 +94,10 @@ function validateMultipartFile(part: MultipartFile) {
  * 
  * @param part - The FastifyMultipart file part
  * @param folder - Target folder in BunnyCDN
+ * @param fileBaseName Optional base name for the file
  * @returns - The Bunny CDN URL
  */
-export async function handleImageUpload(part: MultipartFile, folder: 'gyms' | 'trainers'): Promise<string> {
+export async function handleImageUpload(part: MultipartFile, folder: string, fileBaseName?: string): Promise<string> {
   // Validate mime-type first (cheap synchronous check)
   validateMultipartFile(part);
 
@@ -111,7 +113,11 @@ export async function handleImageUpload(part: MultipartFile, folder: 'gyms' | 't
   const processedBuffer = await processImage(fileBuffer);
 
   // Upload to Bunny
-  return uploadToBunny(folder, processedBuffer);
+  let finalName: string | undefined = undefined;
+  if (fileBaseName) {
+    finalName = fileBaseName.endsWith('.webp') ? fileBaseName : `${fileBaseName}.webp`;
+  }
+  return uploadToBunny(folder, processedBuffer, finalName);
 }
 
 /**
@@ -123,7 +129,7 @@ export async function handleImageUpload(part: MultipartFile, folder: 'gyms' | 't
  */
 export async function handleMultipleImageUpload(
   parts: MultipartFile[],
-  folder: 'gyms' | 'trainers',
+  folder: string,
 ): Promise<string[]> {
   if (parts.length === 0) {
     return [];
@@ -134,4 +140,27 @@ export async function handleMultipleImageUpload(
 
   const uploads: Promise<string>[] = parts.map((part) => handleImageUpload(part, folder));
   return Promise.all(uploads);
+}
+
+/**
+ * Deletes a file from Bunny storage given its public CDN URL.
+ */
+export async function deleteImageFromBunny(cdnUrl: string): Promise<void> {
+  if (!BUNNY_STORAGE_ZONE_NAME || !BUNNY_STORAGE_API_KEY) {
+    console.warn('Bunny delete skipped – missing credentials')
+    return
+  }
+
+  // Extract path after CDN base
+  const relativePath = cdnUrl.replace(`${PUBLIC_CDN_URL}/`, '')
+  const deleteUrl = `${BUNNY_STORAGE_BASE_URL}/${relativePath}`
+
+  const response = await fetch(deleteUrl, {
+    method: 'DELETE',
+    headers: { AccessKey: BUNNY_STORAGE_API_KEY },
+  })
+
+  if (!response.ok) {
+    console.error('Failed to delete image from BunnyCDN:', response.status, await response.text())
+  }
 } 

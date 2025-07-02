@@ -5,6 +5,7 @@ import { trainerQuerySchema, trainerByIdQuerySchema, formatZodError } from '../u
 import { ValidationError, NotFoundError } from '../utils/database';
 import { z } from 'zod';
 import { handleMultipleImageUpload, handleImageUpload } from '../services/imageService';
+import type { MultipartFile } from '@fastify/multipart';
 
 export async function trainerRoutes(fastify: FastifyInstance) {
   // Get all trainers with pagination
@@ -467,16 +468,53 @@ export async function trainerRoutes(fastify: FastifyInstance) {
       throw new ValidationError('Trainer ID is required');
     }
 
-    const cdnUrls: string[] = [];
+    // Fetch trainer data to build slug
+    const trainer = await trainerService.getTrainerById(id, true);
+    if (!trainer) {
+      throw new NotFoundError('Trainer', id);
+    }
+
+    const nameSlug = `${trainer.first_name_en || trainer.first_name_th || 'trainer'}-${trainer.last_name_en || trainer.last_name_th || ''}`
+      .toLowerCase()
+      .replace(/\s+/g, '-');
+
+    const folderPath: string = `trainers/${nameSlug}-${id.slice(0, 3)}`;
+
+    const existingImages = await trainerService.getTrainerImages(id);
+    const usedSeq = new Set<number>();
+    for (const img of existingImages) {
+      const match = img.image_url.match(/-(\d+)\.webp$/);
+      if (match) usedSeq.add(parseInt(match[1], 10));
+    }
+
+    const incomingParts: MultipartFile[] = [];
     // @ts-ignore
     for await (const part of request.parts()) {
       if (part.type === 'file') {
-        const url = await handleImageUpload(part, 'trainers');
-        cdnUrls.push(url);
+        incomingParts.push(part);
       } else {
         part.value;
       }
     }
+
+    if (existingImages.length + incomingParts.length > 5) {
+      throw new ValidationError('Exceeds maximum of 5 images per trainer');
+    }
+
+    const seqNumbers: number[] = [];
+    let next = 1;
+    while (seqNumbers.length < incomingParts.length) {
+      if (!usedSeq.has(next)) seqNumbers.push(next);
+      next++;
+    }
+
+    const cdnUrls: string[] = await Promise.all(
+      incomingParts.map((part, idx) => {
+        const seq = seqNumbers[idx]!;
+        const fileBase = `${nameSlug}-${seq}`;
+        return handleImageUpload(part, folderPath, fileBase);
+      })
+    );
 
     if (cdnUrls.length === 0) {
       throw new ValidationError('No image files were provided');

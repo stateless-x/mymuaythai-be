@@ -15,6 +15,7 @@ import {
 import { eq, ilike, and, or, desc, sql, count, SQL, inArray, asc } from 'drizzle-orm';
 import { createGymSchema, updateGymSchema, formatZodError } from '../utils/validation';
 import { z } from 'zod';
+import { deleteImageFromBunny } from './imageService';
 
 // Helper type for base Gym selected with province
 type GymWithProvince = Omit<Gym, 'province_id'> & { // province_id is still there from Gym, but we replace its meaning with the object
@@ -564,6 +565,18 @@ export async function addGymImage(gymId: string, imageUrl: string): Promise<GymI
 }
 
 export async function removeGymImage(imageId: string): Promise<boolean> {
+    // Fetch image URL first
+    const imageRow = await db.select().from(schema.gymImages).where(eq(schema.gymImages.id, imageId));
+    const imageUrl = imageRow[0]?.image_url;
+
     const result = await db.delete(schema.gymImages).where(eq(schema.gymImages.id, imageId));
+
+    // Attempt to remove from Bunny as best-effort
+    if (imageUrl) {
+      deleteImageFromBunny(imageUrl).catch((err) => {
+        console.error('Failed to delete image from Bunny:', err);
+      });
+    }
+
     return (result.rowCount ?? 0) > 0;
 } 

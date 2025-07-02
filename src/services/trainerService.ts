@@ -15,6 +15,7 @@ import {
   TrainerImage
 } from '../types';
 import { eq, ilike, and, or, desc, sql, count, SQL, inArray, asc } from 'drizzle-orm';
+import { deleteImageFromBunny } from './imageService';
 
 // Helper function to map raw trainer data to TrainerWithDetails
 function mapRawTrainerToTrainerWithDetails(
@@ -701,6 +702,15 @@ export async function addTrainerImage(trainerId: string, imageUrl: string): Prom
 }
 
 export async function removeTrainerImage(imageId: string): Promise<boolean> {
+  // Fetch image URL
+  const imageRow = await db.select().from(schema.trainerImages).where(eq(schema.trainerImages.id, imageId));
+  const imageUrl = imageRow[0]?.image_url;
+
   const result = await db.delete(schema.trainerImages).where(eq(schema.trainerImages.id, imageId));
+
+  if (imageUrl) {
+    deleteImageFromBunny(imageUrl).catch((err) => console.error('Failed to delete trainer image from Bunny:', err));
+  }
+
   return (result.rowCount ?? 0) > 0;
 } 

@@ -5,6 +5,7 @@ import { ValidationError, NotFoundError } from '../utils/database';
 import { UpdateGymRequest } from '../types';
 import { z } from 'zod';
 import { handleMultipleImageUpload, handleImageUpload } from '../services/imageService';
+import type { MultipartFile } from '@fastify/multipart';
 
 interface ApiResponse<T> {
   success: boolean;
@@ -253,24 +254,50 @@ export async function gymRoutes(fastify: FastifyInstance) {
       throw new ValidationError('Gym ID is required');
     }
 
-    const cdnUrls: string[] = [];
+    // Fetch gym to build folder name
+    const gymData = await gymService.getGymById(id, true);
+    if (!gymData) {
+      throw new NotFoundError('Gym', id);
+    }
 
-    // @ts-ignore - fastify multipart iterator
+    const nameSlug = (gymData.name_en || gymData.name_th || 'gym').toLowerCase().replace(/\s+/g, '-');
+    const folderPath: string = `gyms/${nameSlug}-${id.slice(0, 3)}`;
+
+    const existingImages = await gymService.getGymImages(id);
+    const usedSeq = new Set<number>();
+    for (const img of existingImages) {
+      const match = img.image_url.match(/-(\d+)\.webp$/);
+      if (match) usedSeq.add(parseInt(match[1], 10));
+    }
+
+    const uploadPromises: Promise<string>[] = [];
+    let seqCounter = 1;
+    // @ts-ignore
     for await (const part of request.parts()) {
       if (part.type === 'file') {
-        const url = await handleImageUpload(part, 'gyms');
-        cdnUrls.push(url);
+        // Ensure we don't exceed 5 images in total
+        if (existingImages.length + uploadPromises.length >= 5) {
+          throw new ValidationError('Exceeds maximum of 5 images per gym');
+        }
+
+        // Pick next available sequence number (fill gaps)
+        while (usedSeq.has(seqCounter)) seqCounter++;
+        const fileBase = `${nameSlug}-${seqCounter}`;
+        uploadPromises.push(handleImageUpload(part, folderPath, fileBase));
+        usedSeq.add(seqCounter);
+        seqCounter++;
       } else {
-        // Access value to drain the field part
+        // drain non-file fields
         part.value;
       }
     }
 
-    if (cdnUrls.length === 0) {
+    if (uploadPromises.length === 0) {
       throw new ValidationError('No image files were provided');
     }
 
-    // Persist URLs in DB
+    const cdnUrls = await Promise.all(uploadPromises);
+
     const images = await Promise.all(cdnUrls.map((url) => gymService.addGymImage(id, url)));
 
     const response: ApiResponse<typeof images> = {
