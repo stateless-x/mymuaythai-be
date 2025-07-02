@@ -6,6 +6,7 @@ import { ValidationError, NotFoundError } from '../utils/database';
 import { z } from 'zod';
 import { handleMultipleImageUpload, handleImageUpload } from '../services/imageService';
 import type { MultipartFile } from '@fastify/multipart';
+import { randomUUID } from 'crypto';
 
 export async function trainerRoutes(fastify: FastifyInstance) {
   // Get all trainers with pagination
@@ -481,46 +482,42 @@ export async function trainerRoutes(fastify: FastifyInstance) {
     const folderPath: string = `trainers/${nameSlug}-${id.slice(0, 3)}`;
 
     const existingImages = await trainerService.getTrainerImages(id);
-    const usedSeq = new Set<number>();
-    for (const img of existingImages) {
-      const match = img.image_url.match(/-(\d+)\.webp$/);
-      if (match) usedSeq.add(parseInt(match[1], 10));
-    }
+    
+    const uploadPromises: Promise<{ cdnUrl: string, imageId: string }>[] = [];
 
-    const incomingParts: MultipartFile[] = [];
     // @ts-ignore
     for await (const part of request.parts()) {
       if (part.type === 'file') {
-        incomingParts.push(part);
+        if (existingImages.length + uploadPromises.length >= 5) {
+          // Drain the stream of any excess files to prevent hanging, but do not process it.
+          await part.toBuffer();
+          continue;
+        }
+
+        const imageId = randomUUID();
+        const fileBase = `${nameSlug}-${imageId.slice(0, 6)}`;
+        
+        // Start the upload immediately and push the promise to the array
+        uploadPromises.push(
+          handleImageUpload(part, folderPath, fileBase).then(cdnUrl => ({
+            cdnUrl,
+            imageId
+          }))
+        );
       } else {
         part.value;
       }
     }
 
-    if (existingImages.length + incomingParts.length > 5) {
-      throw new ValidationError('Exceeds maximum of 5 images per trainer');
-    }
-
-    const seqNumbers: number[] = [];
-    let next = 1;
-    while (seqNumbers.length < incomingParts.length) {
-      if (!usedSeq.has(next)) seqNumbers.push(next);
-      next++;
-    }
-
-    const cdnUrls: string[] = await Promise.all(
-      incomingParts.map((part, idx) => {
-        const seq = seqNumbers[idx]!;
-        const fileBase = `${nameSlug}-${seq}`;
-        return handleImageUpload(part, folderPath, fileBase);
-      })
-    );
-
-    if (cdnUrls.length === 0) {
+    if (uploadPromises.length === 0) {
       throw new ValidationError('No image files were provided');
     }
 
-    const images = await Promise.all(cdnUrls.map((url) => trainerService.addTrainerImage(id, url)));
+    const uploadedImagesData = await Promise.all(uploadPromises);
+
+    const images = await Promise.all(
+      uploadedImagesData.map(data => trainerService.addTrainerImage(id, data.cdnUrl, data.imageId))
+    );
 
     const response: ApiResponse<typeof images> = {
       success: true,

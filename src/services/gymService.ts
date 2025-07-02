@@ -554,8 +554,8 @@ export async function deleteGym(id: string): Promise<boolean> {
   });
 }
 
-export async function addGymImage(gymId: string, imageUrl: string): Promise<GymImage> {
-    const newImage: NewGymImage = { gym_id: gymId, image_url: imageUrl };
+export async function addGymImage(gymId: string, imageUrl: string, imageId: string): Promise<GymImage> {
+    const newImage: NewGymImage = { id: imageId, gym_id: gymId, image_url: imageUrl };
     const result = await db.insert(schema.gymImages).values(newImage).returning();
     const image = result[0];
     if (!image) {

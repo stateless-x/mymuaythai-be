@@ -67,11 +67,14 @@ fastify.register(compress, {
   encodings: ['gzip', 'deflate'],
 });
 
-// File uploads (multipart)
+// Register multipart plugin with 5 MB per file limit and max 5 files
 fastify.register(multipart, {
-  limits: {
-    fileSize: 5 * 1024 * 1024, // 5 MB limit per file
-  },
+  limits: { fileSize: 5 * 1024 * 1024, files: 5 },
+});
+
+// Increase global bodyLimit so 5×5 MB requests are accepted
+fastify.addContentTypeParser('*', { bodyLimit: 30 * 1024 * 1024 }, (req, payload, done) => {
+  done(null, payload);
 });
 
 fastify.register(cors, corsConfig);

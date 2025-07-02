@@ -6,6 +6,7 @@ import { UpdateGymRequest } from '../types';
 import { z } from 'zod';
 import { handleMultipleImageUpload, handleImageUpload } from '../services/imageService';
 import type { MultipartFile } from '@fastify/multipart';
+import { randomUUID } from 'crypto';
 
 interface ApiResponse<T> {
   success: boolean;
@@ -264,28 +265,29 @@ export async function gymRoutes(fastify: FastifyInstance) {
     const folderPath: string = `gyms/${nameSlug}-${id.slice(0, 3)}`;
 
     const existingImages = await gymService.getGymImages(id);
-    const usedSeq = new Set<number>();
-    for (const img of existingImages) {
-      const match = img.image_url.match(/-(\d+)\.webp$/);
-      if (match) usedSeq.add(parseInt(match[1], 10));
-    }
+    
+    const uploadPromises: Promise<{ cdnUrl: string, imageId: string }>[] = [];
 
-    const uploadPromises: Promise<string>[] = [];
-    let seqCounter = 1;
     // @ts-ignore
     for await (const part of request.parts()) {
       if (part.type === 'file') {
-        // Ensure we don't exceed 5 images in total
         if (existingImages.length + uploadPromises.length >= 5) {
-          throw new ValidationError('Exceeds maximum of 5 images per gym');
+          // Drain the stream of any excess files to prevent hanging, but do not process it.
+          // This is a safety measure; the client-side should prevent this.
+          await part.toBuffer();
+          continue;
         }
 
-        // Pick next available sequence number (fill gaps)
-        while (usedSeq.has(seqCounter)) seqCounter++;
-        const fileBase = `${nameSlug}-${seqCounter}`;
-        uploadPromises.push(handleImageUpload(part, folderPath, fileBase));
-        usedSeq.add(seqCounter);
-        seqCounter++;
+        const imageId = randomUUID();
+        const fileBase = `${nameSlug}-${imageId.slice(0, 3)}`;
+        
+        // Start the upload immediately to consume the stream, and push the resulting promise.
+        uploadPromises.push(
+          handleImageUpload(part, folderPath, fileBase).then(cdnUrl => ({
+            cdnUrl,
+            imageId
+          }))
+        );
       } else {
         // drain non-file fields
         part.value;
@@ -296,9 +298,11 @@ export async function gymRoutes(fastify: FastifyInstance) {
       throw new ValidationError('No image files were provided');
     }
 
-    const cdnUrls = await Promise.all(uploadPromises);
+    const uploadedImagesData = await Promise.all(uploadPromises);
 
-    const images = await Promise.all(cdnUrls.map((url) => gymService.addGymImage(id, url)));
+    const images = await Promise.all(
+        uploadedImagesData.map(data => gymService.addGymImage(id, data.cdnUrl, data.imageId))
+    );
 
     const response: ApiResponse<typeof images> = {
       success: true,

@@ -693,8 +693,9 @@ export async function getTrainerImages(trainerId: string): Promise<TrainerImage[
   return db.select().from(schema.trainerImages).where(eq(schema.trainerImages.trainer_id, trainerId));
 }
 
-export async function addTrainerImage(trainerId: string, imageUrl: string): Promise<TrainerImage> {
+export async function addTrainerImage(trainerId: string, imageUrl: string, imageId: string): Promise<TrainerImage> {
   const result = await db.insert(schema.trainerImages).values({
+    id: imageId,
     trainer_id: trainerId,
     image_url: imageUrl,
   }).returning();
