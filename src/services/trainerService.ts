@@ -11,7 +11,8 @@ import {
   Gym,
   Class,
   Tag,
-  NewTrainerClass
+  NewTrainerClass,
+  TrainerImage
 } from '../types';
 import { eq, ilike, and, or, desc, sql, count, SQL, inArray, asc } from 'drizzle-orm';
 
@@ -21,7 +22,8 @@ function mapRawTrainerToTrainerWithDetails(
   provinceData: Province | null, 
   gymData: Gym | null,
   classes: TrainerClassWithDetails[] = [],
-  tags: Tag[] = []
+  tags: Tag[] = [],
+  images: TrainerImage[] = []
 ): TrainerWithDetails {
   const result: TrainerWithDetails = {
     id: rawTrainerData.id,
@@ -42,7 +44,8 @@ function mapRawTrainerToTrainerWithDetails(
     updated_at: rawTrainerData.updated_at,
     province: provinceData,
     classes,
-    tags
+    tags,
+    images,
   };
 
   if (gymData !== null) {
@@ -232,7 +235,8 @@ export async function getAllTrainers(
       trainer.provinceData as Province | null, 
       trainer.gymData as Gym | null,
       classes,
-      tags
+      tags,
+      []
     );
     
     trainersWithDetailsList.push(trainerWithDetails);
@@ -314,12 +318,16 @@ export async function getTrainerById(id: string, includeInactive: boolean = fals
     class: tc.classes || null
   }));
 
+  // Fetch trainer images (up to 5 but fetch all)
+  const images = await db.select().from(schema.trainerImages).where(eq(schema.trainerImages.trainer_id, id));
+
   return mapRawTrainerToTrainerWithDetails(
     rawTrainerData, 
     rawTrainerData.provinceData as Province | null,
     rawTrainerData.gymData as Gym | null,
     classes,
-    tags
+    tags,
+    images
   );
 }
 
@@ -442,7 +450,7 @@ export async function createTrainer(trainerData: CreateTrainerRequest): Promise<
         }
       }
       
-      return mapRawTrainerToTrainerWithDetails(createdTrainer, provinceData, gymData, trainerClasses, trainerTags);
+      return mapRawTrainerToTrainerWithDetails(createdTrainer, provinceData, gymData, trainerClasses, trainerTags, []);
     });
     
     return result;
@@ -604,7 +612,7 @@ export async function updateTrainer(id: string, trainerData: UpdateTrainerReques
         class: tc.classes || null
       }));
       
-      return mapRawTrainerToTrainerWithDetails(trainer, provinceData, gymData, currentClasses, currentTags);
+      return mapRawTrainerToTrainerWithDetails(trainer, provinceData, gymData, currentClasses, currentTags, []);
     });
     
     return result;
@@ -678,4 +686,21 @@ export async function searchTrainers(query: string, page: number = 1, pageSize: 
 // Add a new function specifically for getting unassigned trainers
 export async function getUnassignedTrainers(page: number = 1, pageSize: number = 20, includeInactive: boolean = false, includeClasses: boolean = false): Promise<{ trainers: TrainerWithDetails[], total: number }> {
   return getAllTrainers(page, pageSize, undefined, undefined, undefined, undefined, !includeInactive ? true : undefined, 'updated_at', 'desc', includeClasses, false, true);
+}
+
+export async function getTrainerImages(trainerId: string): Promise<TrainerImage[]> {
+  return db.select().from(schema.trainerImages).where(eq(schema.trainerImages.trainer_id, trainerId));
+}
+
+export async function addTrainerImage(trainerId: string, imageUrl: string): Promise<TrainerImage> {
+  const result = await db.insert(schema.trainerImages).values({
+    trainer_id: trainerId,
+    image_url: imageUrl,
+  }).returning();
+  return result[0]!;
+}
+
+export async function removeTrainerImage(imageId: string): Promise<boolean> {
+  const result = await db.delete(schema.trainerImages).where(eq(schema.trainerImages.id, imageId));
+  return (result.rowCount ?? 0) > 0;
 } 

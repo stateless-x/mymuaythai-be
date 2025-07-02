@@ -4,6 +4,7 @@ import { CreateTrainerRequest, ApiResponse, PaginatedResponse, TrainerWithDetail
 import { trainerQuerySchema, trainerByIdQuerySchema, formatZodError } from '../utils/validation';
 import { ValidationError, NotFoundError } from '../utils/database';
 import { z } from 'zod';
+import { handleMultipleImageUpload, handleImageUpload } from '../services/imageService';
 
 export async function trainerRoutes(fastify: FastifyInstance) {
   // Get all trainers with pagination
@@ -457,5 +458,60 @@ export async function trainerRoutes(fastify: FastifyInstance) {
       };
       return reply.code(500).send(response);
     }
+  });
+
+  // Upload and add trainer images (multipart, up to 5 files)
+  fastify.post('/trainers/:id/images', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+    const { id } = request.params;
+    if (!id) {
+      throw new ValidationError('Trainer ID is required');
+    }
+
+    const cdnUrls: string[] = [];
+    // @ts-ignore
+    for await (const part of request.parts()) {
+      if (part.type === 'file') {
+        const url = await handleImageUpload(part, 'trainers');
+        cdnUrls.push(url);
+      } else {
+        part.value;
+      }
+    }
+
+    if (cdnUrls.length === 0) {
+      throw new ValidationError('No image files were provided');
+    }
+
+    const images = await Promise.all(cdnUrls.map((url) => trainerService.addTrainerImage(id, url)));
+
+    const response: ApiResponse<typeof images> = {
+      success: true,
+      data: images,
+      message: 'Images uploaded and saved successfully',
+    };
+
+    return reply.code(201).send(response);
+  });
+
+  // Remove trainer image
+  fastify.delete('/trainers/images/:imageId', async (request: FastifyRequest<{ Params: { imageId: string } }>, reply: FastifyReply) => {
+    const { imageId } = request.params;
+
+    if (!imageId) {
+      throw new ValidationError('Image ID is required');
+    }
+
+    const deleted = await trainerService.removeTrainerImage(imageId);
+
+    if (!deleted) {
+      throw new NotFoundError('Image', imageId);
+    }
+
+    const response: ApiResponse<null> = {
+      success: true,
+      message: 'Image removed successfully',
+    };
+
+    return reply.code(200).send(response);
   });
 } 

@@ -4,6 +4,7 @@ import { createGymSchema, updateGymSchema, gymQuerySchema, gymByIdQuerySchema, f
 import { ValidationError, NotFoundError } from '../utils/database';
 import { UpdateGymRequest } from '../types';
 import { z } from 'zod';
+import { handleMultipleImageUpload, handleImageUpload } from '../services/imageService';
 
 interface ApiResponse<T> {
   success: boolean;
@@ -245,37 +246,39 @@ export async function gymRoutes(fastify: FastifyInstance) {
     return reply.code(200).send(response);
   });
 
-  // Add gym image
-  fastify.post('/gyms/:id/images', async (request: FastifyRequest<{ 
-    Params: { id: string }, 
-    Body: { image_url: string } 
-  }>, reply: FastifyReply) => {
+  // Upload and add gym images (multipart, up to 5 files)
+  fastify.post('/gyms/:id/images', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const { id } = request.params;
-    const { image_url } = request.body;
-    
     if (!id) {
       throw new ValidationError('Gym ID is required');
     }
-    
-    if (!image_url || typeof image_url !== 'string') {
-      throw new ValidationError('Valid image URL is required');
+
+    const cdnUrls: string[] = [];
+
+    // @ts-ignore - fastify multipart iterator
+    for await (const part of request.parts()) {
+      if (part.type === 'file') {
+        const url = await handleImageUpload(part, 'gyms');
+        cdnUrls.push(url);
+      } else {
+        // Access value to drain the field part
+        part.value;
+      }
     }
-    
-    // Validate URL format
-    try {
-      new globalThis.URL(image_url);
-    } catch {
-      throw new ValidationError('Invalid image URL format');
+
+    if (cdnUrls.length === 0) {
+      throw new ValidationError('No image files were provided');
     }
-    
-    const image = await gymService.addGymImage(id, image_url);
-    
-    const response: ApiResponse<typeof image> = {
+
+    // Persist URLs in DB
+    const images = await Promise.all(cdnUrls.map((url) => gymService.addGymImage(id, url)));
+
+    const response: ApiResponse<typeof images> = {
       success: true,
-      data: image,
-      message: 'Image added successfully',
+      data: images,
+      message: 'Images uploaded and saved successfully',
     };
-    
+
     return reply.code(201).send(response);
   });
 

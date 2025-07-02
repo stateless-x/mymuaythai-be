@@ -372,7 +372,13 @@ export async function createGym(gymData: CreateGymRequest): Promise<GymWithDetai
 
         let newTags: Tag[] = [];
         if (newTagObjects.length > 0) {
-            newTags = await tx.insert(schema.tags).values(newTagObjects.map(t => ({name_en: t.name_en, name_th: t.name_th || t.name_en}))).returning();
+            newTags = await tx.insert(schema.tags).values(
+              newTagObjects.map(t => ({
+                slug: t.name_en.toLowerCase().replace(/\s+/g, '-'),
+                name_en: t.name_en,
+                name_th: t.name_th || t.name_en,
+              }))
+            ).returning();
         }
         createdTags = [...existingTags, ...newTags];
 
@@ -386,6 +392,9 @@ export async function createGym(gymData: CreateGymRequest): Promise<GymWithDetai
 
     let createdImages: GymImage[] = [];
     if (imageUrls && imageUrls.length > 0) {
+      if (imageUrls.length > 5) {
+        throw new Error('A maximum of 5 images is allowed per gym.');
+      }
       createdImages = await tx.insert(schema.gymImages).values(imageUrls.map((img: any) => ({
         gym_id: newGym.id,
         image_url: img.image_url
@@ -453,7 +462,13 @@ export async function updateGym(id: string, gymData: UpdateGymRequest): Promise<
 
           let newTags: Tag[] = [];
           if (newTagObjects.length > 0) {
-              newTags = await tx.insert(schema.tags).values(newTagObjects.map(t => ({name_en: t.name_en, name_th: t.name_th || t.name_en}))).returning();
+              newTags = await tx.insert(schema.tags).values(
+                newTagObjects.map(t => ({
+                  slug: t.name_en.toLowerCase().replace(/\s+/g, '-'),
+                  name_en: t.name_en,
+                  name_th: t.name_th || t.name_en,
+                }))
+              ).returning();
           }
           finalTags = [...existingTags, ...newTags];
   
@@ -474,6 +489,9 @@ export async function updateGym(id: string, gymData: UpdateGymRequest): Promise<
   
       let finalImages: GymImage[] = [];
       if (imageUrls !== undefined) {
+        if (imageUrls.length > 5) {
+          throw new Error('A maximum of 5 images is allowed per gym.');
+        }
         await tx.delete(schema.gymImages).where(eq(schema.gymImages.gym_id, id));
         if (imageUrls.length > 0) {
           finalImages = await tx.insert(schema.gymImages).values(imageUrls.map((img: any) => ({

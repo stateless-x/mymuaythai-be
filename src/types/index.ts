@@ -1,4 +1,5 @@
 import * as schema from '../db/schema';
+// images type later refer to trainerImages
 
 // Database entity types based on the ER diagram
 
@@ -36,6 +37,9 @@ export type NewGymTag = typeof schema.gymTags.$inferInsert;
 
 export type TrainerTag = typeof schema.trainerTags.$inferSelect;
 export type NewTrainerTag = typeof schema.trainerTags.$inferInsert;
+
+export type TrainerImage = typeof schema.trainerImages.$inferSelect;
+export type NewTrainerImage = typeof schema.trainerImages.$inferInsert;
 
 // --- API Request and Response Types ---
 
@@ -127,6 +131,7 @@ export interface TrainerWithDetails {
   primaryGym?: Gym | null; // The gym listed in trainers.gym_id
   classes?: TrainerClassWithDetails[]; // Combined standard and private classes
   tags?: Tag[]; // via trainerTags
+  images?: TrainerImage[];
 }
 
 // --- Class Specific API Types (Example) ---

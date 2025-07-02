@@ -5,6 +5,7 @@ import rateLimit from '@fastify/rate-limit';
 import compress from '@fastify/compress';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
+import multipart from '@fastify/multipart';
 import { gymRoutes } from './routes/gyms';
 import { trainerRoutes } from './routes/trainers';
 import { trainerSelectionRoutes } from './routes/trainerSelection';
@@ -64,6 +65,13 @@ fastify.register(rateLimit, {
 fastify.register(compress, { 
   global: true,
   encodings: ['gzip', 'deflate'],
+});
+
+// File uploads (multipart)
+fastify.register(multipart, {
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5 MB limit per file
+  },
 });
 
 fastify.register(cors, corsConfig);
@@ -234,14 +242,18 @@ const start = async (): Promise<void> => {
     // Connect to database
     await checkDatabaseConnection();
 
-    // Start the server
-    await fastify.listen(serverConfig);
+    // Start the server (pass only allowed options)
+    await fastify.listen({ port: serverConfig.port, host: serverConfig.host });
     fastify.log.info(`🚀 Server is running on http://${serverConfig.host}:${serverConfig.port}`);
     fastify.log.info(`📚 API documentation available at http://${serverConfig.host}:${serverConfig.port}/docs`);
     fastify.log.info(`🏥 Health checks available at http://${serverConfig.host}:${serverConfig.port}/health`);
     fastify.log.info(`🌍 Environment: ${env.NODE_ENV}`);
   } catch (err) {
-    fastify.log.error('❌ Failed to start server:', err);
+    // Properly log the error object so we can see details
+    fastify.log.error({ err }, '❌ Failed to start server');
+    // Fallback console for situations where logger is mis-configured
+    // @ts-ignore
+    if (err && err.stack) console.error(err);
     process.exit(1);
   }
 };

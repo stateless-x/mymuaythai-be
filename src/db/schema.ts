@@ -115,6 +115,12 @@ export const trainerTags = pgTable('trainer_tags', {
   tag_id: integer('tag_id').references(() => tags.id).notNull(),
 });
 
+export const trainerImages = pgTable('trainer_images', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  trainer_id: uuid('trainer_id').references(() => trainers.id).notNull(),
+  image_url: text('image_url').notNull(),
+});
+
 // --- RELATIONS ---
 
 export const userRelations = relations(users, ({ many }) => ({}));
@@ -158,6 +164,7 @@ export const trainerRelations = relations(trainers, ({ one, many }) => ({
   }),
   trainerClasses: many(trainerClasses),
   trainerTags: many(trainerTags),
+  images: many(trainerImages),
 }));
 
 export const classRelations = relations(classes, ({ many }) => ({
@@ -199,6 +206,13 @@ export const trainerTagRelations = relations(trainerTags, ({ one }) => ({
   tag: one(tags, {
     fields: [trainerTags.tag_id],
     references: [tags.id],
+  }),
+}));
+
+export const trainerImageRelations = relations(trainerImages, ({ one }) => ({
+  trainer: one(trainers, {
+    fields: [trainerImages.trainer_id],
+    references: [trainers.id],
   }),
 }));
 
