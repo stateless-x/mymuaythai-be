@@ -81,36 +81,6 @@ export async function getAllGyms(params: {
   
   if (searchTerm) {
       const searchPattern = `%${searchTerm.toLowerCase()}%`;
-      const exactPattern = searchTerm.toLowerCase();
-      
-      // Create relevance-based ordering using CASE WHEN for scoring
-      // Higher scores for exact matches, lower scores for partial matches
-      const relevanceScore = sql`
-        CASE 
-          -- Exact matches in names get highest priority (score 100)
-          WHEN LOWER(${schema.gyms.name_th}) = ${exactPattern} THEN 100
-          WHEN LOWER(${schema.gyms.name_en}) = ${exactPattern} THEN 100
-          
-          -- Names starting with search term get high priority (score 80)
-          WHEN LOWER(${schema.gyms.name_th}) LIKE ${exactPattern + '%'} THEN 80
-          WHEN LOWER(${schema.gyms.name_en}) LIKE ${exactPattern + '%'} THEN 80
-          
-          -- Names containing search term get medium priority (score 60)
-          WHEN LOWER(${schema.gyms.name_th}) LIKE ${searchPattern} THEN 60
-          WHEN LOWER(${schema.gyms.name_en}) LIKE ${searchPattern} THEN 60
-          
-          -- Description matches get lower priority (score 40)
-          WHEN LOWER(${schema.gyms.description_th}) LIKE ${searchPattern} THEN 40
-          WHEN LOWER(${schema.gyms.description_en}) LIKE ${searchPattern} THEN 40
-          
-          -- Province matches get lowest priority (score 20)
-          WHEN LOWER(${schema.provinces.name_th}) LIKE ${searchPattern} THEN 20
-          WHEN LOWER(${schema.provinces.name_en}) LIKE ${searchPattern} THEN 20
-          
-          ELSE 0
-        END
-      `;
-      
       whereConditions.push(
           or(
               ilike(schema.gyms.name_th, searchPattern),
@@ -121,9 +91,6 @@ export async function getAllGyms(params: {
               ilike(schema.provinces.name_en, searchPattern)
           )
       );
-      
-      // Store relevance score for ordering
-      whereConditions.push(sql`${relevanceScore} > 0`);
   }
 
   const validWhereConditions = whereConditions.filter(c => c !== undefined) as SQL<unknown>[];
@@ -148,71 +115,11 @@ export async function getAllGyms(params: {
       created_at: schema.gyms.created_at,
       updated_at: schema.gyms.updated_at,
       provinceData: schema.provinces,
-      // Add relevance score to select when searching
-      ...(searchTerm ? {
-        relevance: sql`
-          CASE 
-            -- Exact matches in names get highest priority (score 100)
-            WHEN LOWER(${schema.gyms.name_th}) = ${searchTerm.toLowerCase()} THEN 100
-            WHEN LOWER(${schema.gyms.name_en}) = ${searchTerm.toLowerCase()} THEN 100
-            
-            -- Names starting with search term get high priority (score 80)
-            WHEN LOWER(${schema.gyms.name_th}) LIKE ${searchTerm.toLowerCase() + '%'} THEN 80
-            WHEN LOWER(${schema.gyms.name_en}) LIKE ${searchTerm.toLowerCase() + '%'} THEN 80
-            
-            -- Names containing search term get medium priority (score 60)
-            WHEN LOWER(${schema.gyms.name_th}) LIKE ${'%' + searchTerm.toLowerCase() + '%'} THEN 60
-            WHEN LOWER(${schema.gyms.name_en}) LIKE ${'%' + searchTerm.toLowerCase() + '%'} THEN 60
-            
-            -- Description matches get lower priority (score 40)
-            WHEN LOWER(${schema.gyms.description_th}) LIKE ${'%' + searchTerm.toLowerCase() + '%'} THEN 40
-            WHEN LOWER(${schema.gyms.description_en}) LIKE ${'%' + searchTerm.toLowerCase() + '%'} THEN 40
-            
-            -- Province matches get lowest priority (score 20)
-            WHEN LOWER(${schema.provinces.name_th}) LIKE ${'%' + searchTerm.toLowerCase() + '%'} THEN 20
-            WHEN LOWER(${schema.provinces.name_en}) LIKE ${'%' + searchTerm.toLowerCase() + '%'} THEN 20
-            
-            ELSE 0
-          END
-        `
-      } : {})
     })
     .from(schema.gyms)
     .leftJoin(schema.provinces, eq(schema.gyms.province_id, schema.provinces.id))
     .where(validWhereConditions.length > 0 ? and(...validWhereConditions) : undefined)
-    .orderBy(
-      // If searching, order by relevance first, then by sort field
-      ...(searchTerm ? [
-        desc(sql`
-          CASE 
-            -- Exact matches in names get highest priority (score 100)
-            WHEN LOWER(${schema.gyms.name_th}) = ${searchTerm.toLowerCase()} THEN 100
-            WHEN LOWER(${schema.gyms.name_en}) = ${searchTerm.toLowerCase()} THEN 100
-            
-            -- Names starting with search term get high priority (score 80)
-            WHEN LOWER(${schema.gyms.name_th}) LIKE ${searchTerm.toLowerCase() + '%'} THEN 80
-            WHEN LOWER(${schema.gyms.name_en}) LIKE ${searchTerm.toLowerCase() + '%'} THEN 80
-            
-            -- Names containing search term get medium priority (score 60)
-            WHEN LOWER(${schema.gyms.name_th}) LIKE ${'%' + searchTerm.toLowerCase() + '%'} THEN 60
-            WHEN LOWER(${schema.gyms.name_en}) LIKE ${'%' + searchTerm.toLowerCase() + '%'} THEN 60
-            
-            -- Description matches get lower priority (score 40)
-            WHEN LOWER(${schema.gyms.description_th}) LIKE ${'%' + searchTerm.toLowerCase() + '%'} THEN 40
-            WHEN LOWER(${schema.gyms.description_en}) LIKE ${'%' + searchTerm.toLowerCase() + '%'} THEN 40
-            
-            -- Province matches get lowest priority (score 20)
-            WHEN LOWER(${schema.provinces.name_th}) LIKE ${'%' + searchTerm.toLowerCase() + '%'} THEN 20
-            WHEN LOWER(${schema.provinces.name_en}) LIKE ${'%' + searchTerm.toLowerCase() + '%'} THEN 20
-            
-            ELSE 0
-          END
-        `),
-        sortBy === 'asc' ? asc(sortColumn) : desc(sortColumn)
-      ] : [
-        sortBy === 'asc' ? asc(sortColumn) : desc(sortColumn)
-      ])
-    )
+    .orderBy(sortBy === 'asc' ? asc(sortColumn) : desc(sortColumn))
     .limit(pageSize)
     .offset(offset);
 
@@ -353,8 +260,8 @@ export async function createGym(gymData: CreateGymRequest): Promise<GymWithDetai
   }
 
   const { tags: tagObjects, associatedTrainers: trainerIds, ...gymDetails } = validationResult.data;
-  // Handle images separately since it might not be in the validation schema
-  const imageUrls = (gymData as any).images || [];
+  // Images are handled via separate endpoints, not during creation.
+  // This aligns with the trainer creation flow.
 
   return await db.transaction(async (tx) => {
     const newGyms = await tx.insert(schema.gyms).values(gymDetails).returning();
@@ -391,16 +298,8 @@ export async function createGym(gymData: CreateGymRequest): Promise<GymWithDetai
         }
     }
 
-    let createdImages: GymImage[] = [];
-    if (imageUrls && imageUrls.length > 0) {
-      if (imageUrls.length > 5) {
-        throw new Error('A maximum of 5 images is allowed per gym.');
-      }
-      createdImages = await tx.insert(schema.gymImages).values(imageUrls.map((img: any) => ({
-        gym_id: newGym.id,
-        image_url: img.image_url
-      }))).returning();
-    }
+    // Images are not handled here. They will be uploaded in a subsequent step.
+    const createdImages: GymImage[] = [];
     
     let associatedTrainers: Trainer[] = [];
     if (trainerIds && trainerIds.length > 0) {
@@ -423,16 +322,14 @@ export async function updateGym(id: string, gymData: UpdateGymRequest): Promise<
     }
     
     const { tags: tagObjects, associatedTrainers: trainerIds, ...gymDetails } = validationResult.data;
-    // Handle images separately since it might not be in the validation schema
-    const imageUrls = (gymData as any).images || undefined;
+    // Images are handled via separate endpoints and are not part of this update request.
   
     return await db.transaction(async (tx) => {
-      // Check if any update is happening (main gym fields, tags, images, or trainers)
+      // Check if any update is happening (main gym fields, tags, or trainers)
       const hasMainFieldsUpdate = Object.keys(gymDetails).length > 0;
       const hasTagsUpdate = tagObjects !== undefined;
-      const hasImagesUpdate = imageUrls !== undefined;
       const hasTrainersUpdate = trainerIds !== undefined;
-      const hasAnyUpdate = hasMainFieldsUpdate || hasTagsUpdate || hasImagesUpdate || hasTrainersUpdate;
+      const hasAnyUpdate = hasMainFieldsUpdate || hasTagsUpdate || hasTrainersUpdate;
 
       let updatedGyms;
       if (hasMainFieldsUpdate) {
@@ -488,21 +385,9 @@ export async function updateGym(id: string, gymData: UpdateGymRequest): Promise<
           }
       }
   
-      let finalImages: GymImage[] = [];
-      if (imageUrls !== undefined) {
-        if (imageUrls.length > 5) {
-          throw new Error('A maximum of 5 images is allowed per gym.');
-        }
-        await tx.delete(schema.gymImages).where(eq(schema.gymImages.gym_id, id));
-        if (imageUrls.length > 0) {
-          finalImages = await tx.insert(schema.gymImages).values(imageUrls.map((img: any) => ({
-            gym_id: id,
-            image_url: img.image_url
-          }))).returning();
-        }
-      } else {
-          finalImages = await tx.select().from(schema.gymImages).where(eq(schema.gymImages.gym_id, id));
-      }
+      // Images are not handled in the main update method anymore.
+      // They are managed via addGymImage and removeGymImage, so we just fetch the current ones.
+      const finalImages = await tx.select().from(schema.gymImages).where(eq(schema.gymImages.gym_id, id));
       
       let finalTrainers: Trainer[] = [];
       if (trainerIds) {

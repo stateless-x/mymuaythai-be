@@ -414,15 +414,15 @@ export async function createTrainer(trainerData: CreateTrainerRequest): Promise<
           const trainerClassToInsert = {
             trainer_id: createdTrainer.id,
             class_id: null, // Private class
-            name_th: classData.name.th,
-            name_en: classData.name.en,
-            description_th: classData.description.th,
-            description_en: classData.description.en,
-            duration_minutes: classData.duration,
-            max_students: classData.maxStudents,
-            price: Math.round(classData.price * 100), // Convert to smallest currency unit (satang)
-            is_private_class: classData.isPrivateClass !== false,
-            is_active: classData.isActive !== false,
+            name_th: classData.name_th,
+            name_en: classData.name_en,
+            description_th: classData.description_th,
+            description_en: classData.description_en,
+            duration_minutes: classData.duration_minutes,
+            max_students: classData.max_students,
+            price: classData.price,
+            is_private_class: classData.is_private_class,
+            is_active: classData.is_active,
           };
           
           const result = await tx.insert(schema.trainerClasses)
@@ -465,6 +465,9 @@ export async function updateTrainer(id: string, trainerData: UpdateTrainerReques
   try {
     // Extract tags and classes from trainer data if present
     const { tags, classes, ...trainerFields } = trainerData as any;
+    
+    delete (trainerFields as Partial<Trainer>).created_at;
+    delete (trainerFields as Partial<Trainer>).updated_at;
     
     const result = await db.transaction(async (tx) => {
       let updatedTrainer: Trainer[] = [];
@@ -552,10 +555,7 @@ export async function updateTrainer(id: string, trainerData: UpdateTrainerReques
       if (classes) {
         // First, delete existing trainer classes (private classes only)
         await tx.delete(schema.trainerClasses)
-          .where(and(
-            eq(schema.trainerClasses.trainer_id, id),
-            eq(schema.trainerClasses.is_private_class, true)
-          ));
+          .where(eq(schema.trainerClasses.trainer_id, id));
         
         // Then, insert new trainer classes
         if (classes.length > 0) {
@@ -563,15 +563,15 @@ export async function updateTrainer(id: string, trainerData: UpdateTrainerReques
             const trainerClassToInsert = {
               trainer_id: id,
               class_id: null, // Private class
-              name_th: classData.name.th,
-              name_en: classData.name.en,
-              description_th: classData.description.th,
-              description_en: classData.description.en,
-              duration_minutes: classData.duration,
-              max_students: classData.maxStudents,
-              price: Math.round(classData.price * 100), // Convert to smallest currency unit (satang)
-              is_private_class: classData.isPrivateClass !== false,
-              is_active: classData.isActive !== false,
+              name_th: classData.name_th,
+              name_en: classData.name_en,
+              description_th: classData.description_th,
+              description_en: classData.description_en,
+              duration_minutes: classData.duration_minutes,
+              max_students: classData.max_students,
+              price: classData.price,
+              is_private_class: classData.is_private_class,
+              is_active: classData.is_active,
             };
             
             await tx.insert(schema.trainerClasses)
@@ -613,7 +613,10 @@ export async function updateTrainer(id: string, trainerData: UpdateTrainerReques
         class: tc.classes || null
       }));
       
-      return mapRawTrainerToTrainerWithDetails(trainer, provinceData, gymData, currentClasses, currentTags, []);
+      const currentImages = await tx.select()
+        .from(schema.trainerImages)
+        .where(eq(schema.trainerImages.trainer_id, id));
+      return mapRawTrainerToTrainerWithDetails(trainer, provinceData, gymData, currentClasses, currentTags, currentImages);
     });
     
     return result;
@@ -625,8 +628,16 @@ export async function updateTrainer(id: string, trainerData: UpdateTrainerReques
 
 export async function deleteTrainer(id: string): Promise<boolean> {
   try {
+    // First, fetch all images to delete them from Bunny
+    const imagesToDelete = await db.select()
+      .from(schema.trainerImages)
+      .where(eq(schema.trainerImages.trainer_id, id));
+
     const result = await db.transaction(async (tx) => {
       // Delete associations first to avoid foreign key constraint violations
+      await tx.delete(schema.trainerImages)
+        .where(eq(schema.trainerImages.trainer_id, id));
+        
       await tx.delete(schema.trainerTags)
         .where(eq(schema.trainerTags.trainer_id, id));
         
@@ -640,6 +651,20 @@ export async function deleteTrainer(id: string): Promise<boolean> {
       
       return deletedTrainer.length > 0;
     });
+    
+    // If transaction was successful, delete images from Bunny
+    if (result) {
+      const deletePromises = imagesToDelete.map(image => {
+        if (image.image_url) {
+          return deleteImageFromBunny(image.image_url);
+        }
+        return Promise.resolve();
+      });
+      await Promise.all(deletePromises).catch(err => {
+        // Log errors but don't fail the whole operation since DB part is done
+        console.error("One or more images failed to delete from BunnyCDN:", err);
+      });
+    }
     return result;
   } catch (error) {
     console.error(`Failed to delete trainer with id ${id}:`, error);
