@@ -55,12 +55,12 @@ A comprehensive backend platform for managing Muay Thai gyms and trainers in Tha
    ```bash
    cp env.example .env
    ```
-   Update `.env` with your database credentials.
+   Update `.env` with your database credentials and other settings. Make sure to fill out the `ADMIN_EMAIL` and `ADMIN_PASSWORD` as they will be used to create the initial admin account.
 
 5. **Database Migration & Seeding**
    ```bash
    bun run db:migrate
-   bun run db:seed
+   bun run db:seed:dev
    ```
 
 6. **Start Development Server**
@@ -278,4 +278,5 @@ bun run db:studio             # Open Drizzle Studio
 ### Environment Requirements
 
 Make sure your `.env` file includes:
+```
 ```

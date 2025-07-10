@@ -16,10 +16,6 @@ async function runDbMigrations() {
   } catch (error) {
     console.error('❌ Error running migrations:', error);
     process.exit(1);
-  } finally {
-    // It's important to close the pool when the script is done to allow the process to exit.
-    await pool.end();
-    console.log('Database pool closed.');
   }
 }
 

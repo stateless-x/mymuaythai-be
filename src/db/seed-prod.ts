@@ -91,8 +91,6 @@ async function main() {
   } catch (error) {
     console.error('\n❌ An error occurred during the production seeding process:', error);
     process.exit(1);
-  } finally {
-    await pool.end().catch(console.error);
   }
 }
 

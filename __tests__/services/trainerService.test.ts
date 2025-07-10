@@ -460,7 +460,7 @@ describe('TrainerService', () => {
       });
 
       const result = await trainerService.updateTrainer('trainer-1', updateData);
-
+      console.log(result);
       expect(result).not.toBeNull();
       expect(result?.first_name_en).toBe('Updated');
       expect(result?.phone).toBe('5555555555');
