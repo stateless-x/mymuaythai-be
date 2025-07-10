@@ -51,6 +51,7 @@ fastify.register(helmet, {
 fastify.register(rateLimit, {
   max: rateLimitConfig.max,
   timeWindow: rateLimitConfig.timeWindow,
+  allowList: rateLimitConfig.allowList,
   errorResponseBuilder: function (request, context) {
     return {
       success: false,
@@ -145,7 +146,7 @@ fastify.register(async (fastify) => {
   // Admin routes with stricter rate limiting for login
   await fastify.register(async (adminFastify) => {
     await adminFastify.register(rateLimit, {
-      max: 5, // 5 login attempts per window
+      max: 5,
       timeWindow: rateLimitConfig.timeWindow,
       keyGenerator: (request) => `login:${request.ip}`,
       errorResponseBuilder: function (request, context) {
