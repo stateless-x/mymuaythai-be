@@ -1,4 +1,4 @@
-import Fastify from 'fastify';
+import Fastify, { FastifyRequest } from 'fastify';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
@@ -15,30 +15,32 @@ import { healthRoutes } from './routes/health';
 import { dashboardRoutes } from './routes/dashboard';
 import adminUsersRoutes from './routes/adminUsers';
 import { checkDatabaseConnection } from './db/config';
-import { 
-  env, 
-  serverConfig, 
-  corsConfig, 
-  rateLimitConfig, 
-  logConfig, 
-  swaggerConfig 
+import { AuthService } from './services/authService';
+import {
+  env,
+  serverConfig,
+  corsConfig,
+  rateLimitConfig,
+  logConfig,
+  swaggerConfig,
 } from './config/environment';
 
 // Create Fastify instance with better logging
 const fastify = Fastify({
-  logger: env.NODE_ENV === 'production' 
-    ? { level: 'info' }
-    : {
-        level: 'debug',
-        transport: {
-          target: 'pino-pretty',
-          options: {
-            colorize: true,
-            translateTime: 'HH:MM:ss Z',
-            ignore: 'pid,hostname',
+  logger:
+    env.NODE_ENV === 'production'
+      ? { level: 'info' }
+      : {
+          level: 'debug',
+          transport: {
+            target: 'pino-pretty',
+            options: {
+              colorize: true,
+              translateTime: 'HH:MM:ss Z',
+              ignore: 'pid,hostname',
+            },
           },
         },
-      },
   trustProxy: serverConfig.trustProxy,
 });
 
@@ -47,11 +49,21 @@ fastify.register(helmet, {
   contentSecurityPolicy: false,
 });
 
-// Global rate limiting (for general API endpoints)
+const isUserAdminOrStaff = (req: FastifyRequest) => {
+  const token = AuthService.extractTokenFromHeader(req.headers.authorization);
+  if (!token) return false;
+
+  const payload = AuthService.verifyAccessToken(token);
+  if (!payload) return false;
+
+  return payload.role === 'admin' || payload.role === 'staff';
+};
+
 fastify.register(rateLimit, {
-  max: rateLimitConfig.max,
+  max: (req: FastifyRequest) =>
+    isUserAdminOrStaff(req) ? rateLimitConfig.adminMax : rateLimitConfig.max,
   timeWindow: rateLimitConfig.timeWindow,
-  allowList: (req) => req.url.startsWith('/health'),
+  allowList: req => req.url.startsWith('/health'),
   errorResponseBuilder: function (request, context) {
     return {
       success: false,
@@ -63,7 +75,7 @@ fastify.register(rateLimit, {
 });
 
 // Compression
-fastify.register(compress, { 
+fastify.register(compress, {
   global: true,
   encodings: ['gzip', 'deflate'],
 });
@@ -118,7 +130,7 @@ fastify.register(swaggerUi, {
     deepLinking: false,
   },
   staticCSP: true,
-  transformStaticCSP: (header) => header,
+  transformStaticCSP: header => header,
 });
 
 // Health check endpoints (no rate limiting)
@@ -126,8 +138,8 @@ fastify.register(healthRoutes);
 
 // Basic health endpoint for load balancers
 fastify.get('/health', async (request, reply) => {
-  return { 
-    status: 'ok', 
+  return {
+    status: 'ok',
     timestamp: new Date().toISOString(),
     service: env.API_TITLE,
     version: env.API_VERSION,
@@ -135,35 +147,38 @@ fastify.get('/health', async (request, reply) => {
 });
 
 // API routes with rate limiting
-fastify.register(async (fastify) => {
+fastify.register(async fastify => {
   await fastify.register(gymRoutes, { prefix: '/api' });
   await fastify.register(trainerRoutes, { prefix: '/api' });
   await fastify.register(trainerSelectionRoutes, { prefix: '/api' });
   await fastify.register(provinceRoutes, { prefix: '/api' });
   await fastify.register(tagRoutes, { prefix: '/api' });
   await fastify.register(dashboardRoutes, { prefix: '/api' });
-  
+
   // Admin routes with stricter rate limiting for login
-  await fastify.register(async (adminFastify) => {
-    await adminFastify.register(rateLimit, {
-      max: 5,
-      timeWindow: rateLimitConfig.timeWindow,
-      keyGenerator: (request) => `login:${request.ip}`,
-      errorResponseBuilder: function (request, context) {
-        return {
-          success: false,
-          error: 'Too many login attempts',
-          message: `Rate limit exceeded. Try again in ${Math.ceil(context.ttl / 1000)} seconds.`,
-          statusCode: 429,
-          retryAfter: context.ttl,
-        };
-      },
-      // Only apply to login endpoints
-      allowList: (request) => !request.url.includes('/login'),
-    });
-    
-    await adminFastify.register(adminUsersRoutes);
-  }, { prefix: '/api' });
+  await fastify.register(
+    async adminFastify => {
+      await adminFastify.register(rateLimit, {
+        max: 5,
+        timeWindow: rateLimitConfig.timeWindow,
+        keyGenerator: request => `login:${request.ip}`,
+        errorResponseBuilder: function (request, context) {
+          return {
+            success: false,
+            error: 'Too many login attempts',
+            message: `Rate limit exceeded. Try again in ${Math.ceil(context.ttl / 1000)} seconds.`,
+            statusCode: 429,
+            retryAfter: context.ttl,
+          };
+        },
+        // Only apply to login endpoints
+        allowList: request => !request.url.includes('/login'),
+      });
+
+      await adminFastify.register(adminUsersRoutes);
+    },
+    { prefix: '/api' }
+  );
 });
 
 // Register error handler
@@ -172,18 +187,21 @@ fastify.setErrorHandler(async (error, request, reply) => {
   const path = request.url;
 
   // Log error for monitoring
-  request.log.error({
-    error: {
-      message: error.message,
-      stack: error.stack,
-      name: error.name,
+  request.log.error(
+    {
+      error: {
+        message: error.message,
+        stack: error.stack,
+        name: error.name,
+      },
+      request: {
+        method: request.method,
+        url: request.url,
+        ip: request.ip,
+      },
     },
-    request: {
-      method: request.method,
-      url: request.url,
-      ip: request.ip,
-    },
-  }, 'Request error occurred');
+    'Request error occurred'
+  );
 
   let statusCode = error.statusCode || 500;
   let errorMessage = error.message || 'Internal Server Error';
@@ -222,14 +240,14 @@ fastify.setNotFoundHandler(async (request, reply) => {
     timestamp: new Date().toISOString(),
     path: request.url,
   };
-  
+
   return reply.status(404).send(response);
 });
 
 // Graceful shutdown handler
 const gracefulShutdown = async (signal: string) => {
   fastify.log.info(`Received ${signal}, shutting down gracefully...`);
-  
+
   try {
     await fastify.close();
     fastify.log.info('✅ Server closed successfully');
@@ -260,8 +278,10 @@ const connectToDatabaseWithRetries = async (
         fastify.log.error('❌ Final attempt to connect to database failed. Exiting.');
         throw error;
       }
-      fastify.log.warn(`⚠️ Database connection failed. Attempt ${i} of ${retries}. Retrying in ${delay / 1000}s...`);
-      await new Promise((res) => setTimeout(res, delay));
+      fastify.log.warn(
+        `⚠️ Database connection failed. Attempt ${i} of ${retries}. Retrying in ${delay / 1000}s...`
+      );
+      await new Promise(res => setTimeout(res, delay));
       delay = Math.floor(delay * backoffFactor);
     }
   }
@@ -276,8 +296,12 @@ const start = async (): Promise<void> => {
     // Start the server (pass only allowed options)
     await fastify.listen({ port: serverConfig.port, host: serverConfig.host });
     fastify.log.info(`🚀 Server is running on http://${serverConfig.host}:${serverConfig.port}`);
-    fastify.log.info(`📚 API documentation available at http://${serverConfig.host}:${serverConfig.port}/docs`);
-    fastify.log.info(`🏥 Health checks available at http://${serverConfig.host}:${serverConfig.port}/health`);
+    fastify.log.info(
+      `📚 API documentation available at http://${serverConfig.host}:${serverConfig.port}/docs`
+    );
+    fastify.log.info(
+      `🏥 Health checks available at http://${serverConfig.host}:${serverConfig.port}/health`
+    );
     fastify.log.info(`🌍 Environment: ${env.NODE_ENV}`);
   } catch (err) {
     // Properly log the error object so we can see details
@@ -290,12 +314,12 @@ const start = async (): Promise<void> => {
 };
 
 // Handle process termination
-['SIGINT', 'SIGTERM', 'SIGUSR2'].forEach((signal) => {
+['SIGINT', 'SIGTERM', 'SIGUSR2'].forEach(signal => {
   process.on(signal, () => gracefulShutdown(signal));
 });
 
 // Handle uncaught exceptions
-process.on('uncaughtException', (error) => {
+process.on('uncaughtException', error => {
   fastify.log.fatal('Uncaught Exception:', error);
   gracefulShutdown('uncaughtException');
 });
@@ -306,4 +330,4 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 // Start the server
-start(); 
+start();

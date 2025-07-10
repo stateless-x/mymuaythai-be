@@ -25,7 +25,9 @@ const envSchema = z.object({
   
   // Rate limiting
   RATE_LIMIT_MAX: z.string().regex(/^\d+$/).transform(Number).default('100'),
+  ADMIN_RATE_LIMIT_MAX: z.string().regex(/^\d+$/).transform(Number).default('1000'),
   RATE_LIMIT_WINDOW: z.string().default('5 minutes'),
+  ADMIN_RATE_LIMIT_WINDOW: z.string().default('5 minutes'),
   
   // Logging
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
@@ -93,7 +95,9 @@ export const corsConfig = {
 // Rate limiting configuration
 export const rateLimitConfig = {
   max: isProduction ? env.RATE_LIMIT_MAX : 1000,
+  adminMax: isProduction ? env.ADMIN_RATE_LIMIT_MAX : 2000,
   timeWindow: env.RATE_LIMIT_WINDOW,
+  adminTimeWindow: env.ADMIN_RATE_LIMIT_WINDOW,
 };
 
 // Logging configuration
