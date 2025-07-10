@@ -240,11 +240,38 @@ const gracefulShutdown = async (signal: string) => {
   }
 };
 
+/**
+ * Connects to the database with a retry mechanism.
+ * @param retries The number of times to retry the connection.
+ * @param delay The initial delay between retries in milliseconds.
+ */
+const connectToDatabaseWithRetries = async (
+  retries = parseInt(process.env.DB_CONNECT_RETRIES ?? '5', 10),
+  delay = parseInt(process.env.DB_CONNECT_DELAY_MS ?? '2000', 10),
+  backoffFactor = parseFloat(process.env.DB_CONNECT_BACKOFF ?? '2')
+) => {
+  for (let i = 1; i <= retries; i++) {
+    try {
+      await checkDatabaseConnection();
+      fastify.log.info('✅ Database connection successful.');
+      return;
+    } catch (error) {
+      if (i === retries) {
+        fastify.log.error('❌ Final attempt to connect to database failed. Exiting.');
+        throw error;
+      }
+      fastify.log.warn(`⚠️ Database connection failed. Attempt ${i} of ${retries}. Retrying in ${delay / 1000}s...`);
+      await new Promise((res) => setTimeout(res, delay));
+      delay = Math.floor(delay * backoffFactor);
+    }
+  }
+};
+
 // Start server
 const start = async (): Promise<void> => {
   try {
-    // Connect to database
-    await checkDatabaseConnection();
+    // Connect to database with retries
+    await connectToDatabaseWithRetries();
 
     // Start the server (pass only allowed options)
     await fastify.listen({ port: serverConfig.port, host: serverConfig.host });

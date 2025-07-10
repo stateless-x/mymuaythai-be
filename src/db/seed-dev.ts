@@ -1,9 +1,9 @@
 import '../config/environment';
 import { db, pool } from './config';
 import * as schema from './schema';
+import * as adminUserService from '../services/adminUserService';
 import { seedProvinces } from './province-seed';
 import { eq } from 'drizzle-orm';
-import bcrypt from 'bcrypt';
 import type { NewClass, NewTag, NewGym, NewTrainer, Gym, Trainer, Tag, Class } from '../types';
 
 // --- Environment Safety Check ---
@@ -49,15 +49,26 @@ const getRandomElements = <T>(array: T[], count: number): T[] => [...array].sort
 async function seedCoreData() {
   console.log('👤 Seeding admin user...');
   const adminEmail = process.env.ADMIN_EMAIL || 'admin@mymuaythai.dev';
-  const existingAdmin = await db.query.adminUsers.findFirst({ where: eq(schema.adminUsers.email, adminEmail) });
-
-  if (!existingAdmin) {
-    const adminPassword = process.env.ADMIN_PASSWORD || 'password123';
-    const hashedPassword = await bcrypt.hash(adminPassword, 10);
-    await db.insert(schema.adminUsers).values({ email: adminEmail, password: hashedPassword, role: 'admin' });
-    console.log(`✅ Admin user created: ${adminEmail}`);
-  } else {
-    console.log('✅ Admin user already exists.');
+  const adminPassword = process.env.ADMIN_PASSWORD || 'password123';
+  
+  try {
+    const existingAdmin = await adminUserService.getAdminUserByEmail(adminEmail);
+    if (!existingAdmin) {
+      await adminUserService.createAdminUser({
+        email: adminEmail,
+        password: adminPassword,
+        role: 'admin',
+      });
+      console.log(`✅ Admin user created: ${adminEmail}`);
+    } else {
+      console.log('✅ Admin user already exists.');
+    }
+  } catch (error: any) {
+    if (error.message.includes('Maximum 3 users allowed')) {
+      console.warn(`⚠️  Could not create admin user '${adminEmail}': maximum user limit reached.`);
+    } else {
+      console.error(`❌ Error creating admin user '${adminEmail}':`, error);
+    }
   }
 
   console.log('🏷️ Seeding tags and classes...');
@@ -156,9 +167,6 @@ async function main() {
   } catch (error) {
     console.error('\n❌ An error occurred during the seeding process:', error);
     process.exit(1);
-  } finally {
-    await pool.end().catch(console.error);
-    console.log('🔒 Database connection pool closed.');
   }
 }
 

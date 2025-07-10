@@ -172,7 +172,7 @@ export async function purgeDuplicateProvinces() {
   }
 }
 
-export async function seedAllProvinces() {
+export async function seedProvinces() {
   console.log('🌍 Seeding all provinces of Thailand...');
   console.log(`📋 Total unique provinces to seed: ${THAILAND_PROVINCES.length}`);
   
@@ -222,40 +222,5 @@ export async function seedAllProvinces() {
   } catch (error) {
     console.error('❌ Error seeding provinces:', error);
     throw error;
-  } finally {
-    // Close pool connection after seeding
-    if (pool && !(pool as any)._ended) {
-      await pool.end();
-      console.log('\n🔌 Database connection closed.');
-    }
   }
-}
-
-async function main() {
-  try {
-    const args = process.argv.slice(2);
-    
-    if (args.includes('--purge-only')) {
-      console.log('🚀 Running province duplicate purge only...');
-      await purgeDuplicateProvinces();
-      console.log('✅ Duplicate purge completed successfully');
-    } else {
-      console.log('🚀 Starting province seeding...');
-      await seedAllProvinces();
-      console.log('✅ Province seeding completed successfully');
-    }
-    
-    process.exit(0);
-  } catch (error: any) {
-    console.error('❌ Operation failed:', error);
-    process.exit(1);
-  }
-}
-
-// Export for programmatic use
-export { seedAllProvinces as seedProvinces };
-
-// Run if called directly
-if (import.meta.url === `file://${process.argv[1]}`) {
-  main();
 } 

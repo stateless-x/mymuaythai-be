@@ -1,9 +1,8 @@
 import '../config/environment';
 import { db, pool } from './config';
 import * as schema from './schema';
+import * as adminUserService from '../services/adminUserService';
 import { seedProvinces } from './province-seed';
-import { eq } from 'drizzle-orm';
-import bcrypt from 'bcrypt';
 
 // These are the essential tags and classes required for the application to function.
 // They are hardcoded to ensure consistency across all production-like environments.
@@ -55,20 +54,24 @@ async function seedProdData() {
       continue;
     }
     
-    const existingAdmin = await db.query.adminUsers.findFirst({
-      where: eq(schema.adminUsers.email, admin.email),
-    });
-
-    if (!existingAdmin) {
-      const hashedPassword = await bcrypt.hash(admin.password, 10);
-      await db.insert(schema.adminUsers).values({
-        email: admin.email,
-        password: hashedPassword,
-        role: admin.role,
-      });
-      console.log(`✅ Admin user created: ${admin.email}`);
-    } else {
-      console.log(`✅ Admin user already exists: ${admin.email}`);
+    try {
+      const existingAdmin = await adminUserService.getAdminUserByEmail(admin.email);
+      if (!existingAdmin) {
+        await adminUserService.createAdminUser({
+          email: admin.email,
+          password: admin.password,
+          role: admin.role,
+        });
+        console.log(`✅ Admin user created: ${admin.email}`);
+      } else {
+        console.log(`✅ Admin user already exists: ${admin.email}`);
+      }
+    } catch (error: any) {
+      if (error.message.includes('Maximum 3 users allowed')) {
+        console.warn(`⚠️  Could not create admin user '${admin.email}': maximum user limit reached.`);
+      } else {
+        console.error(`❌ Error creating admin user '${admin.email}':`, error);
+      }
     }
   }
 
