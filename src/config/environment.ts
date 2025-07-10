@@ -94,7 +94,6 @@ export const corsConfig = {
 export const rateLimitConfig = {
   max: isProduction ? env.RATE_LIMIT_MAX : 1000,
   timeWindow: env.RATE_LIMIT_WINDOW,
-  allowList: ['/health/liveness', '/health/readiness'],
 };
 
 // Logging configuration

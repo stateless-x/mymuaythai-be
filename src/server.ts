@@ -51,7 +51,7 @@ fastify.register(helmet, {
 fastify.register(rateLimit, {
   max: rateLimitConfig.max,
   timeWindow: rateLimitConfig.timeWindow,
-  allowList: rateLimitConfig.allowList,
+  allowList: (req) => req.url.startsWith('/health'),
   errorResponseBuilder: function (request, context) {
     return {
       success: false,
