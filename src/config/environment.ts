@@ -90,6 +90,7 @@ export const corsConfig = {
         true
       ],
   credentials: true,
+  maxAge: 600,
 };
 
 // Rate limiting configuration
