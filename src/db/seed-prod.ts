@@ -30,6 +30,12 @@ async function seedProdData() {
   // 2. Seed Admin Users
   console.log('👤 Seeding admin users...');
   
+  // Enhanced logging to debug environment variables in production
+  console.log(`[SEEDING] Attempting to use ADMIN_EMAIL: ${process.env.ADMIN_EMAIL}`);
+  console.log(`[SEEDING] ADMIN_PASSWORD found: ${!!process.env.ADMIN_PASSWORD}`);
+  console.log(`[SEEDING] Attempting to use DEV_EMAIL: ${process.env.DEV_EMAIL}`);
+  console.log(`[SEEDING] DEV_PASSWORD found: ${!!process.env.DEV_PASSWORD}`);
+
   const adminsToSeed = [
     {
       email: process.env.ADMIN_EMAIL,
