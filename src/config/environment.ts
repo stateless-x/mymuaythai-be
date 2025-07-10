@@ -79,9 +79,8 @@ export const serverConfig = {
 export const corsConfig = {
   origin: isProduction 
     ? env.ALLOWED_ORIGINS?.split(',') || [
-        'https://mymuaythai.com',
-        'http://localhost:3000',
-        'http://localhost:3333'
+        'https://mymuaythai-admin.vercel.app',
+        'https://mymuaythai.app',
       ]
     : [
         'http://localhost:3000',
