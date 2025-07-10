@@ -4,12 +4,15 @@ A comprehensive backend platform for managing Muay Thai gyms and trainers in Tha
 
 ## 🥊 Features
 
-- **Gym & Trainer Management**: Complete CRUD operations with images, tags, and location data
-- **Province-based Location**: Thai province support with bilingual content
-- **Advanced Search & Categorization**: Full-text search and flexible categorization
-- **RESTful API**: Clean, well-documented API endpoints
-- **Type Safety & Migrations**: Full TypeScript implementation and automated schema management
-- **Functional Service Layer**: Modern functional programming approach
+- **Gym & Trainer Management**: Complete CRUD operations with images, tags, and location data.
+- **Admin User Management**: Full authentication and authorization system using JWT.
+- **Image Uploads**: Handles image processing and uploading to a CDN for gyms and trainers.
+- **Province-based Location**: Thai province support with bilingual content.
+- **Advanced Search & Categorization**: Full-text search and flexible categorization.
+- **Dashboard Analytics**: Endpoints for gathering application statistics.
+- **RESTful API**: Clean, well-documented API endpoints.
+- **Type Safety & Migrations**: Full TypeScript implementation and automated schema management.
+- **Functional Service Layer**: Modern functional programming approach for business logic.
 
 ## 🛠️ Tech Stack
 
@@ -154,16 +157,11 @@ env.example                   # Environment variables template
 
 Planned features and improvements:
 
-- [ ] **Authentication & Authorization**: JWT-based auth
-- [ ] **File Upload Service**: Image upload
-- [ ] **Booking System**: Training session reservation
 - [ ] **Rating & Reviews**: User feedback system
 - [ ] **Real-time Features**: WebSocket support
 - [ ] **Caching Layer**: Redis integration
-- [ ] **Admin Dashboard**: Web-based administration
-- [ ] **Mobile API Extensions**: Additional endpoints
 - [ ] **Multi-tenant Support**: Support for multiple gym chains
-- [ ] **Advanced Analytics**: Reporting and analytics dashboard
+- [ ] **Advanced Analytics**: Expanded reporting and analytics dashboard
 - [ ] **Service Layer Expansion**: Continue functional pattern adoption
 
 ## 🤝 Contributing
@@ -217,29 +215,12 @@ The project includes comprehensive database seeding automation.
 
 | Script | Description |
 |--------|-------------|
-| `bun run db:seed:provinces` | Seeds all 76 Thai provinces |
 | `bun run db:seed:dev` | Seeds essential development data |
-| `bun run db:seed` | Seeds comprehensive sample data |
-| `bun run db:fresh` | Reset + provinces + dev data |
-| `bun run db:fresh:full` | Reset + provinces + full sample data |
-| `bun run setup:dev` | Migrate + provinces + dev data |
-
-### Quick Start Options
-
-**For Development (Recommended):**
-```bash
-bun run setup:dev
-```
-
-**For Demo/Testing:**
-```bash
-bun run db:fresh:full
-```
-
-**For Clean Restart:**
-```bash
-bun run db:fresh
-```
+| `bun run db:seed:dev:massive` | Seeds a massive amount of development data |
+| `bun run db:seed:prod` | Seeds production-ready data |
+| `bun run db:cleanup` | Cleans all data except for provinces |
+| `bun run db:cleanup:full` | Cleans all data, including provinces |
+| `bun run db:reset` | Resets the database and seeds development data |
 
 ### What Gets Seeded
 
@@ -286,23 +267,15 @@ bun run db:fresh
 
 ```bash
 # Database operations
-bun run db:generate    # Generate migrations
-bun run db:migrate     # Run migrations
-bun run db:cleanup     # Clean all data
-bun run db:reset       # Cleanup + migrate
-bun run db:studio      # Open Drizzle Studio
+bun run db:generate           # Generate migrations
+bun run db:migrate            # Run migrations
+bun run db:cleanup            # Clean all data (except provinces)
+bun run db:cleanup:full       # Clean all data (including provinces)
+bun run db:reset              # Reset DB and seed with dev data
+bun run db:studio             # Open Drizzle Studio
 ```
 
 ### Environment Requirements
 
 Make sure your `.env` file includes:
-```env
-DATABASE_URL=postgresql://admin:admin@localhost:5432/mymuaythai
-DB_HOST=localhost
-DB_PORT=5432
-DB_USER=admin
-DB_PASSWORD=admin
-DB_NAME=mymuaythai
 ```
-
-**Note**: All seeding scripts include proper error handling. 

@@ -14,19 +14,13 @@
     "test:watch": "bun test --watch",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "bun run src/db/migrate.ts",
-    "db:seed": "bun run src/db/seed.ts",
-    "db:seed:provinces": "bun run src/db/province-seed.ts",
-    "db:seed:dev": "bun run src/db/dev-seed.ts",
-    "db:seed:massive": "bun run src/db/massive-seed.ts",
+    "db:seed:dev": "bun run src/db/seed-dev.ts",
+    "db:seed:dev:massive": "bun run src/db/seed-dev.ts --massive",
+    "db:seed:prod": "bun run src/db/seed-prod.ts",
     "db:cleanup": "bun run src/db/cleanup.ts",
-    "db:cleanup:full": "bun run src/db/cleanup.ts full",
-    "db:studio": "drizzle-kit studio",
-    "db:reset": "bun run db:cleanup && bun run db:migrate",
-    "db:fresh": "bun run db:reset && bun run db:seed:provinces && bun run db:seed:massive",
-    "db:fresh:dev": "bun run db:reset && bun run db:seed:provinces && bun run db:seed:dev",
-    "db:fresh:full": "bun run db:reset && bun run db:seed:provinces && bun run db:seed",
-    "db:setup:production": "bun run db:migrate && bun run db:seed:provinces",
-    "setup:dev": "bun run db:migrate && bun run db:seed:provinces && bun run db:seed:dev"
+    "db:cleanup:full": "bun run src/db/cleanup.ts --full",
+    "db:reset": "bun run db:cleanup && bun run db:seed:dev",
+    "db:studio": "drizzle-kit studio"
   },
   "keywords": [
     "muaythai",
@@ -36,7 +30,7 @@
     "postgresql"
   ],
   "author": "Purin Buriwong",
-  "license": "MIT",
+  "license": "",
   "dependencies": {
     "@fastify/compress": "7.0.3",
     "@fastify/cors": "9.0.1",
